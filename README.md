@@ -26,8 +26,8 @@ Complete and working. What is built:
 - Lookahead scheduler running on the audio clock
 - Probability, ratchets, and ties
 - Fill mode — hold steps to play them live over the running pattern
-- A single monophonic voice derived from VCO 1 of 4LS
-- MIDI learn with soft takeover on the voice controls
+- A single monophonic voice derived from VCO 1 of 4LS, with a tempo-synced delay
+- MIDI learn with soft takeover, covering the voice, the transport, and the Play and Fill buttons
 - Seven presets
 - The help system in six languages
 
@@ -108,9 +108,33 @@ One oscillator, one filter, one envelope, taken from VCO 1 of 4LS. Deliberately 
 
 **Vel → Cutoff** is worth its own mention. Velocity raises the level, and this control also opens the filter with it, so a hard step is brighter as well as louder. That is most of what makes velocity feel expressive rather than technical.
 
-**MIDI learn** assigns a hardware knob to any voice control. Click MIDI learn, click a control, then move the knob you want. Assignments appear as a small CC number and are saved on that computer. Sweeping the Cutoff by hand while the sequence runs is most of what makes this instrument fun to perform.
+### Delay
 
-Assigned controls use **soft takeover**: after a reload or a preset change the hardware is no longer where the slider is, so it does nothing until you sweep it onto the current value and pick it up. A pink tick on the track shows where the hardware is sitting. This means loading a preset never gets it yanked out of shape by a knob in the wrong position.
+**Time, Feedback and Mix**, the same three controls ADrum uses, with one difference: Time is measured in beats rather than seconds. The choices run 1/32, 1/16, 1/8T, 1/8, dotted 1/8, 1/4, dotted 1/4 and 1/2, and they follow the Tempo when you change it.
+
+This is deliberate. ADrum has no clock, so a free-running delay is right there. Here there is a strict grid, and a delay drifting across it mostly produces mud. Measured in beats, the echoes land on the steps instead — six of the eight divisions fall exactly on the sequence, and the two that do not, 1/32 and 1/8T, are the interesting ones to reach for when you want the echoes between the steps rather than on them.
+
+A dotted 1/8 against straight sixteenths is the classic cascading pattern, and it is the fastest way to show a student that an echo can be a compositional device rather than an effect.
+
+Feedback is capped and the write is limited, so a delay tuned to reinforce itself gets loud and then sits rather than climbing without end. Every preset starts dry except Three octave minor and Ratchets.
+
+### MIDI learn
+
+Click MIDI learn, click a control, then move the knob, fader or pad you want. Assignments appear as a small CC number and are saved on that computer.
+
+Assignable:
+
+| Target | Behaviour |
+| --- | --- |
+| Any voice or delay slider | Continuous, with soft takeover |
+| Tempo | Continuous, 40 to 240 BPM |
+| Last step | Continuous, 1 to 16 — sweeping the pattern length while it runs is a real technique |
+| Play | Toggles on a press, ignores the release |
+| Fill | Momentary: armed while the pad is held, so a fill can be played with one hand |
+
+Sweeping the Cutoff by hand while the sequence runs is most of what makes this instrument fun to perform. Putting Last step on a second knob is the other half — shortening a pattern from 16 to 7 mid-phrase changes the music far more than any filter sweep.
+
+Sliders use **soft takeover**: after a reload or a preset change the hardware is no longer where the slider is, so it does nothing until you sweep it onto the current value and pick it up. A pink tick on the track shows where the hardware is sitting. This means loading a preset never gets it yanked out of shape by a knob in the wrong position.
 
 The step parameters are deliberately not assignable. They are edited rather than performed, and eighty of them on a controller would make the mapping list useless.
 
@@ -124,13 +148,13 @@ Seven worked examples, each demonstrating one idea, all built from the same pane
 
 **Two octave major** — C major from C4 to C6. Fifteen notes, so Last step sits at 15. A two octave scale does not fit a sixteen step grid, and hearing why is the lesson.
 
-**Three octave minor** — A minor pentatonic from A3 to A6. Five notes to the octave means three octaves land on exactly sixteen steps. The contrast with the preset above is the point of having both.
+**Three octave minor** — A minor pentatonic from A3 to A6. Five notes to the octave means three octaves land on exactly sixteen steps. The contrast with the preset above is the point of having both. A dotted 1/8 delay turns the ascending run into a cascade.
 
 **Probability** — steps 1, 5, 9 and 13 are certain; everything between them sits between 20% and 60%. The skeleton holds while the filigree rearranges itself, about nine notes of sixteen on any given pass.
 
 **Velocity and filter** — one note, sixteen times, velocity climbing from 8 to 127 with the cutoff starting at 220 Hz. Nothing changes but how hard it is struck.
 
-**Ratchets** — divisions climbing 1, 2, 3, 4 so the repeats are countable. Forty-one hits per bar instead of sixteen.
+**Ratchets** — divisions climbing 1, 2, 3, 4 so the repeats are countable. Forty-one hits per bar instead of sixteen, with a 1/16 delay doubling them again.
 
 **Tie drone** — every gate at Tie, so the sequence never lets go. One continuous note with pitch, loudness and brightness stepping underneath it. This only sounds at all because Sustain is up; pull Sustain to zero and the whole thing goes silent, which is itself the clearest demonstration of what Sustain does.
 
@@ -151,6 +175,10 @@ Patterns are not saved between sessions. This is deliberate: it keeps the file s
 **What a tie is.** Load Tie drone, then pull Sustain to zero and hear it vanish. Put it back and raise Glide instead.
 
 **Ratchets against probability.** Set a step to ×4 and 50%. It either fires four times or not at all — the roll happens once per step, not once per hit.
+
+**An echo is not an effect.** Load Two octave major, set Delay Mix to about 0.4, then walk Time from 1/16 up to dotted 1/4. Each division rewrites the rhythm of a scale that never changed.
+
+**Playing the length.** Put Last step on a hardware knob and sweep it while the pattern runs. Students hear a phrase get cut short and turn over against the count — the same lesson as odd meter, but performed rather than set.
 
 ---
 
@@ -194,6 +222,8 @@ python3 -m http.server 8000
 **A step cannot tie into itself.** Holding one step in a fill, or setting Last step to 1, would otherwise leave the note-off unsent forever: the envelope never retriggers and decays to the Sustain level. Such a step falls back to a 98% gate instead.
 
 **Ties do not retrigger, ratchets do.** A tied step changes pitch with the envelope left running — the same last-note-priority behaviour 4LS has in Mono. Repeats inside a ratcheted step always re-articulate, otherwise a ratcheted tie would collapse into one long note and the repeats would vanish silently.
+
+**The delay is measured in beats and resolved to seconds at the last moment.** The panel holds a division; the engine is told a duration, recalculated whenever the tempo moves. The buffer is sized once for the worst case — two beats at 40 BPM is three seconds — and never reallocated, so changing tempo mid-performance allocates nothing.
 
 **Envelope times are calibrated to the labels.** A Decay reading 0.5 s falls to 1% of its range in 0.5 s. Same correction as 4LS and ADrum, inherited deliberately so the bug that shipped in the first 4LS build cannot reappear.
 
