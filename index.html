@@ -1,0 +1,1748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>16Max — a step sequencer</title>
+<style>
+:root{
+  --paper:#E4E8E3;
+  --paper-2:#EFF2EE;
+  --grid:#D2D8D2;
+  --ink:#17262A;
+  --ink-2:#5D6F71;
+  --ink-3:#93A19F;
+  --rule:#B7C0B9;
+  --screen:#0A1315;
+  --trace:#3FCF8E;
+  --trace-dim:#1C6B4E;
+  --live:#2547D0;
+  --live-soft:#DDE3F8;
+  --mod:#B0246A;
+  --mod-soft:#F6DEE9;
+  --step:#7FB069;
+  --step-soft:#DCEBD4;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:24px 24px;
+  background-position:-1px -1px;
+  color:var(--ink);
+  font:400 12px/1.45 var(--mono);
+  -webkit-font-smoothing:antialiased;
+  padding:14px;
+  overscroll-behavior:none;
+}
+.wrap{max-width:1240px; margin:0 auto;}
+
+.masthead{
+  display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap;
+  border-bottom:2px solid var(--ink); padding-bottom:10px; margin-bottom:14px;
+}
+.wordmark{font-size:21px; font-weight:600; letter-spacing:.2em; text-transform:uppercase; line-height:1;}
+.wordmark span{color:var(--step);}
+.tagline{font-family:var(--sans); font-size:11.5px; color:var(--ink-2); padding-bottom:2px;}
+.masthead-tools{margin-left:auto; display:flex; gap:6px; align-items:center; flex-wrap:wrap;}
+
+.btn{
+  font:inherit; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+  background:var(--paper-2); color:var(--ink); border:1px solid var(--rule);
+  padding:6px 10px; cursor:pointer; border-radius:1px;
+}
+.btn:hover{border-color:var(--ink-2);}
+.btn:focus-visible{outline:2px solid var(--live); outline-offset:1px;}
+.btn.on{background:var(--live); border-color:var(--live); color:#fff;}
+.btn.play{background:var(--step); border-color:var(--step); color:#fff;}
+
+.seg{display:flex; border:1px solid var(--rule); border-radius:1px; overflow:hidden;}
+.seg button{
+  flex:1; font:inherit; font-size:9.5px; letter-spacing:.08em; text-transform:uppercase;
+  background:var(--paper-2); color:var(--ink-2); border:0; border-right:1px solid var(--rule);
+  padding:5px 4px; cursor:pointer; white-space:nowrap;
+}
+.seg button:last-child{border-right:0;}
+.seg button.on{background:var(--live); color:#fff;}
+.seg button:focus-visible{outline:2px solid var(--live); outline-offset:-2px;}
+
+select.sel{
+  font:inherit; font-size:10px; letter-spacing:.06em;
+  background:var(--paper-2); color:var(--ink); border:1px solid var(--rule);
+  padding:5px 6px; border-radius:1px; cursor:pointer;
+}
+select.sel:focus-visible{outline:2px solid var(--live); outline-offset:1px;}
+
+.panel{background:var(--paper-2); border:1px solid var(--rule); border-left:3px solid var(--live); padding:0 12px 12px; margin-bottom:14px;}
+.panel.seq{border-left-color:var(--step);}
+.panel.mod{border-left-color:var(--mod);}
+.panel-head{
+  display:flex; align-items:baseline; gap:8px;
+  padding:8px 0 9px; margin-bottom:10px; border-bottom:1px solid var(--rule);
+}
+.panel-name{font-size:11px; font-weight:600; letter-spacing:.18em; text-transform:uppercase;}
+.panel-what{font-size:9px; letter-spacing:.04em; color:var(--ink-3); text-transform:uppercase; margin-left:auto;}
+
+/* ---------- transport ---------- */
+.transport{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+.tiny{font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-2);}
+/* the hint carries the mode, so it changes colour with it rather than sitting
+   in the same grey whether the grid edits or plays */
+body.filling #gridHint{color:var(--mod); font-weight:600;}
+
+/* ---------- step grid ---------- */
+.grid{
+  display:grid; grid-template-columns:repeat(8, 1fr); gap:5px;
+  touch-action:manipulation; margin-bottom:6px;
+}
+.st{
+  position:relative; border:1px solid var(--ink); background:var(--paper);
+  border-radius:2px; cursor:pointer; padding:5px 3px 4px;
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  user-select:none; -webkit-user-select:none;
+  min-height:52px;
+}
+.st .n{font-size:8px; letter-spacing:.06em; color:var(--ink-3);}
+.st .nt{font-size:11px; font-weight:600; color:var(--ink-3); letter-spacing:.02em;}
+.st .rt{font-size:7.5px; color:var(--ink-3); letter-spacing:.04em; min-height:9px;}
+.st.on{background:var(--step-soft); border-color:var(--step);}
+.st.on .nt{color:var(--ink);}
+.st.on .rt{color:var(--ink-2);}
+.st.sel{outline:2px solid var(--live); outline-offset:1px;}
+/* the playhead marks where the clock is; a step that rolled a miss shows the
+   head without the flash, which is how probability becomes visible */
+.st.head{background:var(--live-soft); border-color:var(--live);}
+.st.on.head{background:var(--live); border-color:var(--live);}
+.st.on.head .nt, .st.on.head .n, .st.on.head .rt{color:#fff;}
+.st.miss{outline:2px dashed var(--mod); outline-offset:1px;}
+.st .prob{
+  position:absolute; top:2px; right:3px; font-size:7px; color:var(--mod); letter-spacing:0;
+}
+.st.past{opacity:.55;}
+/* a held step during a fill */
+.st.held{background:var(--mod); border-color:var(--mod);}
+.st.held .nt, .st.held .n, .st.held .rt, .st.held .prob{color:#fff;}
+body.filling .grid{touch-action:none;}
+body.filling .st{outline:1px dashed var(--mod); outline-offset:-2px;}
+
+/* ---------- detail editor ---------- */
+.detail{border-top:1px solid var(--rule); padding-top:10px; margin-top:10px;}
+.detail-head{display:flex; align-items:baseline; gap:8px; margin-bottom:9px;}
+.detail-head b{font-size:12px; letter-spacing:.1em;}
+.ctl{margin-bottom:8px; position:relative; border-radius:2px;}
+.ctl-head{display:flex; align-items:baseline; gap:6px; font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-2);}
+.ctl-head .v{margin-left:auto; font-size:9.5px; color:var(--ink); letter-spacing:0; font-variant-numeric:tabular-nums;}
+.ctl-head .cc{font-size:8px; letter-spacing:0; color:var(--mod);}
+.ctl-head .cc.waiting{color:var(--ink-3);}
+
+/* ---------- MIDI learn ----------
+   Scoped to the voice panel: the step parameters are edited, not performed,
+   so there is nothing to gain from putting eighty of them on a controller. */
+.learnbar{
+  display:none; align-items:center; gap:10px; flex-wrap:wrap;
+  border:1px solid var(--mod); background:var(--mod-soft);
+  padding:7px 10px; margin-bottom:14px;
+  font-size:10px; letter-spacing:.06em; color:var(--ink);
+}
+body.learning .learnbar{display:flex;}
+.learnbar .grow{flex:1; min-width:140px;}
+body.learning #voicePanel .ctl{cursor:pointer; outline:1px dashed var(--rule); outline-offset:2px;}
+body.learning #voicePanel .ctl:hover{outline-color:var(--mod);}
+body.learning #voicePanel .ctl input[type=range]{pointer-events:none;}
+#voicePanel .ctl.armed{outline:2px solid var(--mod) !important; background:var(--mod-soft);}
+.hwmark{
+  position:absolute; bottom:5px; width:2px; height:11px; background:var(--mod);
+  opacity:.65; pointer-events:none; display:none; margin-left:-1px;
+}
+input[type=range]{
+  -webkit-appearance:none; appearance:none; width:100%; height:16px; background:transparent; cursor:pointer; margin:0;
+}
+input[type=range]::-webkit-slider-runnable-track{height:3px; background:var(--rule); border-radius:2px;}
+input[type=range]::-moz-range-track{height:3px; background:var(--rule); border-radius:2px;}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none; width:11px; height:11px; margin-top:-4px;
+  background:var(--live); border-radius:50%; border:1px solid var(--paper-2);
+}
+input[type=range]::-moz-range-thumb{width:11px; height:11px; background:var(--live); border-radius:50%; border:1px solid var(--paper-2);}
+input[type=range]:focus-visible{outline:2px solid var(--live); outline-offset:2px;}
+.panel.seq input[type=range]::-webkit-slider-thumb{background:var(--step);}
+.panel.seq input[type=range]::-moz-range-thumb{background:var(--step);}
+
+.row{display:flex; gap:8px; align-items:center; margin-bottom:8px;}
+.row-label{font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-2); min-width:52px;}
+.sub{
+  font-size:8.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3);
+  border-top:1px solid var(--rule); padding-top:8px; margin:12px 0 6px;
+}
+.panel .sub:first-of-type{border-top:0; padding-top:0; margin-top:2px;}
+.segrow{margin-bottom:8px;}
+
+.cols{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:14px; align-items:start;}
+@media (max-width:900px){ .cols{grid-template-columns:minmax(0,1fr);} }
+
+/* ---------- scope ---------- */
+.scr{background:var(--screen); border:1px solid var(--ink); position:relative;}
+.scr canvas{display:block; width:100%; height:auto;}
+.scr-tag{position:absolute; top:5px; left:7px; font-size:8.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--trace-dim); pointer-events:none;}
+
+/* ---------- help ---------- */
+.help{display:none;}
+body.helpon .help{display:block;}
+.helpbar{
+  display:none; align-items:center; gap:8px; flex-wrap:wrap;
+  border:1px solid var(--rule); background:var(--paper-2);
+  padding:7px 10px; margin-bottom:14px;
+}
+body.helpon .helpbar{display:flex;}
+.helpbar .lbl{font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-2);}
+.helpbar .langseg{flex:1 1 auto;}
+.langseg{display:flex; flex-wrap:wrap; border:1px solid var(--rule); border-radius:1px; overflow:hidden;}
+.langseg button{
+  flex:1 1 auto; font:inherit; font-size:10px; letter-spacing:.04em;
+  background:var(--paper); color:var(--ink-2); border:0; border-right:1px solid var(--rule);
+  padding:5px 9px; cursor:pointer; white-space:nowrap; text-align:center;
+}
+.langseg button:last-child{border-right:0;}
+.langseg button.on{background:var(--live); color:#fff;}
+.langseg button:focus-visible{outline:2px solid var(--live); outline-offset:-2px;}
+.help-note{
+  font-family:var(--sans); font-size:11.5px; line-height:1.5; color:var(--ink);
+  background:#fff; border-left:2px solid var(--live);
+  padding:8px 10px; margin-bottom:10px;
+}
+.panel.seq .help-note{border-left-color:var(--step);}
+.panel.mod .help-note{border-left-color:var(--mod);}
+.help-note b{font-weight:600;}
+.help-note .ex{display:block; margin-top:5px; color:var(--ink-2); font-style:italic;}
+/* Arabic help reads right to left. The panel does not flip, because a step
+   sequence runs left to right on every instrument in the world. */
+.help-note[dir="rtl"]{text-align:right; border-left:0; border-right:2px solid var(--live); padding:8px 10px;}
+.panel.seq .help-note[dir="rtl"]{border-right-color:var(--step);}
+.panel.mod .help-note[dir="rtl"]{border-right-color:var(--mod);}
+
+#curtain{position:fixed; inset:0; background:rgba(228,232,227,.96); z-index:50; display:flex; align-items:center; justify-content:center; padding:20px;}
+#curtain .card{max-width:430px; border:2px solid var(--ink); background:var(--paper-2); padding:22px;}
+#curtain h1{font-size:19px; letter-spacing:.2em; text-transform:uppercase; margin-bottom:10px;}
+#curtain p{font-family:var(--sans); font-size:13px; line-height:1.55; color:var(--ink-2); margin-bottom:14px;}
+#startBtn{font-size:12px; padding:11px 22px; background:var(--step); color:#fff; border-color:var(--step);}
+
+@media (prefers-reduced-motion: reduce){*{animation:none !important; transition:none !important;}}
+</style>
+</head>
+<body>
+
+<div id="curtain"><div class="card">
+  <h1>16Max</h1>
+  <p id="curtainA">A sixteen step sequencer. Every step has a note, a length, a loudness, a chance of playing at all, and a number of repeats. Turn on Help to read what each one does.</p>
+  <p id="curtainB">Browsers only start audio after you click. Headphones recommended — keep the volume moderate at first.</p>
+  <div class="langseg" id="langSegStart" style="margin-bottom:14px"></div>
+  <button class="btn" id="startBtn">Start the sequencer</button>
+</div></div>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="wordmark"><span>16</span>MAX</div>
+    <div class="tagline">a sixteen step sequencer</div>
+    <div class="masthead-tools">
+      <select class="sel" id="presetSel"></select>
+      <span class="tiny" id="midiLabel">MIDI: none</span>
+      <button class="btn" id="learnBtn">MIDI learn</button>
+      <button class="btn" id="helpBtn">Help</button>
+    </div>
+  </header>
+
+  <div class="learnbar">
+    <span class="grow" id="learnMsg"></span>
+    <button class="btn" id="learnClear">Clear all</button>
+    <button class="btn" id="learnDone">Done</button>
+  </div>
+
+  <div class="helpbar">
+    <span class="lbl" id="helpLangLbl">Help language</span>
+    <div class="langseg" id="langSeg"></div>
+  </div>
+
+  <div class="cols">
+
+    <div>
+      <!-- SEQUENCER -->
+      <section class="panel seq">
+        <div class="panel-head"><span class="panel-name">Sequence</span><span class="panel-what" id="seqWhat">16 steps</span></div>
+        <div class="help" data-help="seq"></div>
+
+        <div class="transport">
+          <button class="btn play" id="playBtn">Play</button>
+          <div class="ctl" style="flex:1; min-width:130px; margin:0">
+            <div class="ctl-head"><span>Tempo</span><span class="v" id="bpmV"></span></div>
+            <input type="range" id="bpm" min="40" max="240" step="1">
+          </div>
+          <div class="ctl" style="flex:1; min-width:130px; margin:0">
+            <div class="ctl-head"><span>Last step</span><span class="v" id="lastV"></span></div>
+            <input type="range" id="lastStep" min="1" max="16" step="1">
+          </div>
+        </div>
+
+        <div class="grid" id="grid"></div>
+        <div class="transport" style="margin-top:8px">
+          <button class="btn" id="fillBtn">Fill</button>
+          <span class="tiny" id="gridHint"></span>
+        </div>
+
+        <!-- per-step detail -->
+        <div class="detail" id="detail">
+          <div class="detail-head">
+            <b id="detailNum">Step 1</b>
+            <button class="btn" id="stepOn" style="margin-left:auto">On</button>
+          </div>
+          <div class="help" data-help="step"></div>
+          <div class="ctl">
+            <div class="ctl-head"><span>Note</span><span class="v" id="sv-note"></span></div>
+            <input type="range" id="si-note" min="21" max="108" step="1" aria-label="Note">
+          </div>
+          <div class="ctl">
+            <div class="ctl-head"><span>Gate</span><span class="v" id="sv-gate"></span></div>
+            <input type="range" id="si-gate" min="1" max="100" step="1" aria-label="Gate">
+          </div>
+          <div class="ctl">
+            <div class="ctl-head"><span>Velocity</span><span class="v" id="sv-vel"></span></div>
+            <input type="range" id="si-vel" min="1" max="127" step="1" aria-label="Velocity">
+          </div>
+          <div class="ctl">
+            <div class="ctl-head"><span>Probability</span><span class="v" id="sv-prob"></span></div>
+            <input type="range" id="si-prob" min="1" max="100" step="1" aria-label="Probability">
+          </div>
+          <div class="row" style="margin-top:10px">
+            <span class="row-label">Division</span>
+            <div class="seg" id="divSeg">
+              <button data-v="1">1</button><button data-v="2">&frac12;</button>
+              <button data-v="3">&frac13;</button><button data-v="4">&frac14;</button>
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn" id="copyPrev" style="flex:1">Copy to all steps</button>
+            <button class="btn" id="clearStep" style="flex:1">Reset step</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- VOICE -->
+    <div>
+      <section class="panel" id="voicePanel">
+        <div class="panel-head"><span class="panel-name">Voice</span><span class="panel-what">one oscillator</span></div>
+        <div class="help" data-help="voice"></div>
+
+        <div class="scr">
+          <span class="scr-tag">Oscilloscope</span>
+          <canvas id="scope" width="600" height="110"></canvas>
+        </div>
+
+        <div class="sub">Oscillator</div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Shape</span><span class="v" id="vv-shape"></span></div>
+          <input type="range" id="vi-shape" min="0" max="1" step="0.001" aria-label="Shape">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Width</span><span class="v" id="vv-width"></span></div>
+          <input type="range" id="vi-width" min="0" max="1" step="0.001" aria-label="Width">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Octave</span><span class="v" id="vv-oct"></span></div>
+          <input type="range" id="vi-oct" min="0" max="1" step="0.001" aria-label="Octave">
+        </div>
+
+        <div class="sub">Filter</div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Cutoff</span><span class="v" id="vv-cut"></span></div>
+          <input type="range" id="vi-cut" min="0" max="1" step="0.001" aria-label="Cutoff">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Resonance</span><span class="v" id="vv-res"></span></div>
+          <input type="range" id="vi-res" min="0" max="1" step="0.001" aria-label="Resonance">
+        </div>
+
+        <div class="ctl">
+          <div class="ctl-head"><span>Vel &rarr; Cutoff</span><span class="v" id="vv-velCut"></span></div>
+          <input type="range" id="vi-velCut" min="0" max="1" step="0.001" aria-label="Velocity to cutoff">
+        </div>
+
+        <div class="sub">Envelope</div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Attack</span><span class="v" id="vv-a"></span></div>
+          <input type="range" id="vi-a" min="0" max="1" step="0.001" aria-label="Attack">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Decay</span><span class="v" id="vv-d"></span></div>
+          <input type="range" id="vi-d" min="0" max="1" step="0.001" aria-label="Decay">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Sustain</span><span class="v" id="vv-s"></span></div>
+          <input type="range" id="vi-s" min="0" max="1" step="0.001" aria-label="Sustain">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Release</span><span class="v" id="vv-r"></span></div>
+          <input type="range" id="vi-r" min="0" max="1" step="0.001" aria-label="Release">
+        </div>
+
+        <div class="sub">Output</div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Glide</span><span class="v" id="vv-glide"></span></div>
+          <input type="range" id="vi-glide" min="0" max="1" step="0.001" aria-label="Glide">
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span>Master</span><span class="v" id="vv-master"></span></div>
+          <input type="range" id="vi-master" min="0" max="1" step="0.001" aria-label="Master">
+        </div>
+      </section>
+    </div>
+
+  </div>
+</div>
+
+<script id="workletCode" type="text/worklet">
+/* A single monophonic voice, derived from VCO 1 of 4LS: one morphing
+   oscillator, one low-pass filter, one ADSR. Notes arrive with a sample-
+   accurate start time, so the scheduler can place them ahead of the clock
+   rather than at whatever moment a timer happened to fire. */
+
+function limitTo(x, L){
+  const k = 0.7 * L;
+  const ax = x < 0 ? -x : x;
+  if (ax <= k) return x;
+  const y = k + (L - k) * Math.tanh((ax - k) / (L - k));
+  return x < 0 ? -y : y;
+}
+
+function polyBlep(t, dt){
+  if (t < dt){ t = t / dt; return t + t - t * t - 1; }
+  if (t > 1 - dt){ t = (t - 1) / dt; return t * t + t + t + 1; }
+  return 0;
+}
+
+class SVF {
+  constructor(){ this.ic1 = 0; this.ic2 = 0; this.a1 = 0; this.a2 = 0; this.a3 = 0; this.k = 1; this.sat = 2.5; }
+  setCoef(fc, q, sr){
+    if (fc < 15) fc = 15;
+    const nyq = sr * 0.45;
+    if (fc > nyq) fc = nyq;
+    if (q < 0.5) q = 0.5;
+    const g = Math.tan(Math.PI * fc / sr);
+    const u = Math.min(1, Math.max(0, (q - 5) / 13));
+    const k = (1 / q) * (1 - u) + (-0.075) * u;
+    const sing = Math.min(1, Math.max(0, (q - 10.5) / 1.5));
+    this.sat = 2.5 + (0.55 - 2.5) * sing;
+    this.a1 = 1 / (1 + g * (g + k));
+    this.a2 = g * this.a1;
+    this.a3 = g * this.a2;
+    this.k = k;
+  }
+  run(v0){
+    const v3 = v0 - this.ic2;
+    const v1 = this.a1 * this.ic1 + this.a2 * v3;
+    const v2 = this.ic2 + this.a2 * this.ic1 + this.a3 * v3;
+    this.ic1 = limitTo(2 * v1 - this.ic1, this.sat);
+    this.ic2 = 2 * v2 - this.ic2;
+    this.low = v2;
+    if (!isFinite(this.ic1)){ this.ic1 = 0; this.ic2 = 0; this.low = 0; }
+  }
+}
+
+/* Same calibration as 4LS and ADrum: the 0.2172 factor makes the envelope
+   fall to 1% of its range in exactly the time shown on the control. */
+class Env {
+  constructor(){ this.stage = 0; this.v = 0; }
+  gateOn(){ this.stage = 1; }
+  gateOff(){ if (this.stage !== 0) this.stage = 4; }
+  step(a, d, s, r, sr){
+    if (this.stage === 1){
+      this.v += 1 / Math.max(a * sr, 1);
+      if (this.v >= 1){ this.v = 1; this.stage = 2; }
+    } else if (this.stage === 2){
+      const c = Math.exp(-1 / Math.max(d * 0.2172 * sr, 1));
+      this.v = s + (this.v - s) * c;
+      if (Math.abs(this.v - s) < 0.0005){ this.v = s; this.stage = 3; }
+    } else if (this.stage === 3){
+      this.v = s;
+    } else if (this.stage === 4){
+      const c = Math.exp(-1 / Math.max(r * 0.2172 * sr, 1));
+      this.v *= c;
+      if (this.v < 0.0004){ this.v = 0; this.stage = 0; }
+    }
+    return this.v;
+  }
+}
+
+class SixteenMax extends AudioWorkletProcessor {
+  constructor(){
+    super();
+    this.sr = sampleRate;
+    this.ph = Math.random();
+    this.env = new Env();
+    this.lp = new SVF();
+    this.note = 60; this.gl = -1; this.vel = 1;
+    this.gate = false;
+    // events waiting to happen, each stamped with the frame it lands on
+    this.queue = [];
+    this.frame = 0;
+    this.p = {
+      shape:0.5, width:0.5, oct:0,
+      cut:4000, res:2, velCut:0.5,
+      a:0.005, d:0.2, s:0.7, r:0.2,
+      glide:0, master:0.65
+    };
+    this.port.onmessage = e => {
+      const m = e.data;
+      if (m.t === 'p') this.p[m.n] = m.v;
+      else if (m.t === 'ev'){
+        // time arrives in seconds on the audio clock; convert once
+        this.queue.push({ f:Math.round(m.time * this.sr), on:m.on, tie:m.tie, note:m.note, vel:m.vel });
+        this.queue.sort((x, y) => x.f - y.f);
+      }
+      else if (m.t === 'flush'){ this.queue.length = 0; }
+      else if (m.t === 'panic'){
+        this.queue.length = 0; this.gate = false;
+        this.env.stage = 0; this.env.v = 0;
+      }
+    };
+  }
+
+  process(inputs, outputs){
+    const out = outputs[0];
+    const L = out[0], R = out.length > 1 ? out[1] : null;
+    const n = L.length, sr = this.sr, p = this.p;
+
+    const glCoef = p.glide > 0.002 ? 1 - Math.exp(-1 / (p.glide * 0.16 * sr)) : 1;
+    let lastNote = -1;
+
+    for (let s = 0; s < n; s++){
+      const f = this.frame + s;
+
+      // fire everything due on this frame, sample-accurately
+      while (this.queue.length && this.queue[0].f <= f){
+        const ev = this.queue.shift();
+        if (ev.on){
+          if (this.gl < 0) this.gl = ev.note;
+          this.note = ev.note;
+          this.vel = ev.vel;
+          this.gate = true;
+          // A tied note changes pitch without restarting the envelope — the
+          // same last-note-priority behaviour 4LS has in Mono. Retriggering
+          // here would make a tie sound identical to an ordinary note.
+          if (!ev.tie) this.env.gateOn();
+        } else {
+          this.gate = false;
+          this.env.gateOff();
+        }
+      }
+
+      const a = this.env.step(p.a, p.d, p.s, p.r, sr);
+      let y = 0;
+
+      if (this.env.stage !== 0){
+        this.gl += (this.note - this.gl) * glCoef;
+        const semi = this.gl + p.oct * 12;
+        const freq = 440 * Math.pow(2, (semi - 69) / 12);
+        const dt = Math.min(freq / sr, 0.45);
+        this.ph += dt; if (this.ph >= 1) this.ph -= 1;
+
+        // continuous morph: triangle -> saw -> pulse
+        const ph = this.ph;
+        const saw = 2 * ph - 1 - polyBlep(ph, dt);
+        const tri = ph < 0.25 ? -4 * ph : (ph < 0.75 ? 4 * ph - 2 : 4 - 4 * ph);
+        let w = p.width;
+        if (w < 0.03) w = 0.03; else if (w > 0.97) w = 0.97;
+        let pul = ph < w ? -1 : 1;
+        pul -= polyBlep(ph, dt);
+        let phb = ph - w; if (phb < 0) phb += 1;
+        pul += polyBlep(phb, dt);
+        pul -= 1 - 2 * w;
+        pul *= 0.8;
+
+        const m = p.shape;
+        let o;
+        if (m < 0.5){ const k = m * 2; o = tri * (1 - k) + saw * k; }
+        else { const k = (m - 0.5) * 2; o = saw * (1 - k) + pul * k; }
+
+        if ((s & 31) === 0){
+          // Velocity opens the filter as well as raising the level, the way
+          // hardware does. A hard hit is brighter, not merely louder, which is
+          // most of what makes velocity feel expressive rather than technical.
+          const vf = p.cut * Math.pow(2, p.velCut * (this.vel - 1) * 4);
+          this.lp.setCoef(vf, p.res, sr);
+        }
+        this.lp.run(o);
+        y = this.lp.low * a * this.vel;
+        lastNote = this.note;
+      }
+
+      y = limitTo(y * p.master * 0.8, 1);
+      L[s] = y;
+      if (R) R[s] = y;
+    }
+
+    this.frame += n;
+
+    // report the sounding note back for the display
+    this.report = (this.report || 0) + n;
+    if (this.report > sr / 30){
+      this.report = 0;
+      this.port.postMessage({ t:'v', note:lastNote, amp:this.env.v });
+    }
+    return true;
+  }
+}
+registerProcessor('sixteen-max', SixteenMax);
+</script>
+
+<script>
+"use strict";
+
+/* ============================================================
+   LANGUAGE
+   Control names stay in English in every language, the same convention 4LS,
+   Video Surfer and ADrum use — they are shared international vocabulary.
+   ============================================================ */
+const I18N = {
+en:{
+  helpLang:'Help language',
+  hint:{ edit:'Tap a step to select it \u00B7 tap again to switch it on or off',
+        fill:'FILL MODE \u2014 hold steps on the grid, or the Q A W S E D R F T G Y H U J I K keys, to play them' },
+  start:{
+    a:'A sixteen step sequencer. Every step has a note, a length, a loudness, a chance of playing at all, and a number of repeats. Turn on Help to read what each one does.',
+    b:'Browsers only start audio after you click. Headphones recommended — keep the volume moderate at first.',
+    btn:'Start the sequencer'
+  },
+  help:{
+    seq:{ t:'Sixteen steps, played in order, forever.',
+      b:'Tempo sets the speed and Last step sets where the pattern loops back. Setting Last step to something other than 16 is the quickest way to hear an odd meter — seven steps against a four beat count will take fifteen bars to come back around.',
+      ex:['The blue marker is the playhead. Watch it rather than the sound to see what the sequence is doing.','The preset list at the top right is a set of worked examples. Load one, then change a single thing and listen to what moved.'] },
+    step:{ t:'Five things make a step.',
+      b:'Note is the pitch. Gate is how long it holds, and at 100 it ties into the next step instead of releasing. Velocity is how loud. Probability is the chance it plays at all. Division repeats the step inside its own slot.',
+      ex:['Probability is what separates a sequencer from a recording. At 100% you get a pattern. At 60% you get a pattern that is never quite the same twice, and the difference is the whole point of the instrument.','A step outlined in pink was skipped by its own probability. That is the machine deciding, not a fault.'] },
+    voice:{ t:'One oscillator, one filter, one envelope.',
+      b:'Deliberately small. This is a sequencer, and the voice is here to make the sequence audible rather than to be a second synthesizer. Shape sweeps continuously from triangle through saw to pulse.',
+      ex:['Try: a short Decay with Sustain at zero gives a pluck, which makes the pattern easy to follow. Long Release blurs the steps together.','Glide slides from one note to the next instead of jumping. With Gate at 100 the notes tie and the slide is the only thing you hear move.','MIDI learn assigns a hardware knob to any voice control. Turn it on, click a control, then move the knob you want. Sweeping the Cutoff by hand while the sequence runs is most of what makes this fun.'] }
+  }
+},
+es:{
+  helpLang:'Idioma de la ayuda',
+  hint:{ edit:'Toca un paso para seleccionarlo \u00B7 t\u00f3calo otra vez para encenderlo o apagarlo',
+        fill:'MODO FILL \u2014 mant\u00e9n pulsados pasos en la rejilla, o las teclas Q A W S E D R F T G Y H U J I K, para tocarlos' },
+  start:{
+    a:'Un secuenciador de dieciséis pasos. Cada paso tiene una nota, una duración, un volumen, una probabilidad de sonar y un número de repeticiones. Activa Help para leer qué hace cada uno.',
+    b:'Los navegadores solo inician el audio después de un clic. Se recomienda usar auriculares y empezar con el volumen moderado.',
+    btn:'Iniciar el secuenciador'
+  },
+  help:{
+    seq:{ t:'Dieciséis pasos, en orden, para siempre.',
+      b:'Tempo fija la velocidad y Last step indica dónde vuelve a empezar el patrón. Poner Last step en algo distinto de 16 es la forma más rápida de oír un compás irregular: siete pasos contra una cuenta de cuatro tardan quince compases en volver a coincidir.',
+      ex:['El marcador azul es el cabezal de reproducción. Míralo a él, más que escuchar, para entender qué está haciendo la secuencia.','La lista de presets arriba a la derecha son ejemplos ya resueltos. Carga uno, cambia una sola cosa y escucha qu\u00e9 se movi\u00f3.'] },
+    step:{ t:'Cinco cosas forman un paso.',
+      b:'Note es la altura. Gate es cuánto se mantiene, y a 100 se liga al paso siguiente en vez de soltarse. Velocity es lo fuerte que suena. Probability es la probabilidad de que suene siquiera. Division repite el paso dentro de su propia casilla.',
+      ex:['Probability es lo que separa un secuenciador de una grabación. Al 100% tienes un patrón. Al 60% tienes un patrón que nunca se repite igual, y esa diferencia es el sentido del instrumento.','Un paso con el borde rosa fue omitido por su propia probabilidad. Es la máquina decidiendo, no un fallo.'] },
+    voice:{ t:'Un oscilador, un filtro, una envolvente.',
+      b:'Deliberadamente pequeño. Esto es un secuenciador, y la voz está aquí para hacer audible la secuencia, no para ser un segundo sintetizador. Shape recorre de forma continua del triángulo al diente de sierra y al pulso.',
+      ex:['Prueba: un Decay corto con Sustain a cero da un pizzicato, y así el patrón es fácil de seguir. Un Release largo difumina los pasos entre sí.','Glide desliza de una nota a la siguiente en vez de saltar. Con Gate a 100 las notas se ligan y el deslizamiento es lo único que se mueve.','MIDI learn asigna una perilla f\u00edsica a cualquier control de la voz. Act\u00edvalo, haz clic en un control y mueve la perilla que quieras. Barrer el Cutoff a mano mientras corre la secuencia es buena parte de la gracia.'] }
+  }
+},
+ko:{
+  helpLang:'도움말 언어',
+  hint:{ edit:'\uc2a4\ud15d\uc744 \ud0ed\ud558\uba74 \uc120\ud0dd\ub418\uace0, \ud55c \ubc88 \ub354 \ud0ed\ud558\uba74 \ucf1c\uace0 \uaebc\uc9d1\ub2c8\ub2e4',
+        fill:'FILL \ubaa8\ub4dc \u2014 \uadf8\ub9ac\ub4dc\uc758 \uc2a4\ud15d\uc744, \ub610\ub294 Q A W S E D R F T G Y H U J I K \ud0a4\ub97c \ub204\ub974\uace0 \uc788\uc73c\uba74 \uadf8 \uc2a4\ud15d\ub4e4\uc774 \uc5f0\uc8fc\ub429\ub2c8\ub2e4' },
+  start:{
+    a:'16스텝 시퀀서입니다. 스텝마다 음정, 길이, 세기, 울릴 확률, 그리고 반복 횟수를 정할 수 있습니다. Help를 켜면 각각의 설명을 읽을 수 있습니다.',
+    b:'브라우저는 클릭한 뒤에야 소리를 낼 수 있습니다. 헤드폰 사용을 권하며, 처음에는 볼륨을 낮춰 두세요.',
+    btn:'시퀀서 시작'
+  },
+  help:{
+    seq:{ t:'열여섯 개의 스텝이 순서대로, 계속 반복됩니다.',
+      b:'Tempo는 속도를, Last step은 패턴이 어디서 처음으로 되돌아갈지를 정합니다. Last step을 16이 아닌 값으로 두면 변박을 가장 빠르게 들어 볼 수 있습니다. 일곱 스텝을 네 박자로 세면 다시 맞아떨어지기까지 열다섯 마디가 걸립니다.',
+      ex:['파란 표시가 재생 헤드입니다. 소리보다 이 표시를 보면 시퀀스가 무엇을 하고 있는지 알 수 있습니다.','\uc624\ub978\ucabd \uc704\uc758 \ud504\ub9ac\uc14b \ubaa9\ub85d\uc740 \uc644\uc131\ub41c \uc608\uc81c \ubaa8\uc74c\uc785\ub2c8\ub2e4. \ud558\ub098\ub97c \ubd88\ub7ec\uc628 \ub4a4 \ud55c \uac00\uc9c0\ub9cc \ubc14\uafb8\uace0 \ubb34\uc5c7\uc774 \ub2ec\ub77c\uc84c\ub294\uc9c0 \ub4e4\uc5b4 \ubcf4\uc138\uc694.'] },
+    step:{ t:'스텝 하나는 다섯 가지로 이루어집니다.',
+      b:'Note는 음정입니다. Gate는 얼마나 길게 유지할지를 정하며, 100이면 놓지 않고 다음 스텝으로 이어집니다. Velocity는 세기입니다. Probability는 아예 울릴 확률입니다. Division은 그 스텝의 자리 안에서 몇 번 반복할지를 정합니다.',
+      ex:['Probability야말로 시퀀서와 녹음을 가르는 요소입니다. 100%면 패턴이 되고, 60%면 두 번 다시 똑같지 않은 패턴이 됩니다. 이 차이가 바로 이 악기의 핵심입니다.','분홍색 점선으로 표시된 스텝은 자기 확률에 걸려 건너뛴 것입니다. 고장이 아니라 기계가 내린 결정입니다.'] },
+    voice:{ t:'오실레이터 하나, 필터 하나, 엔벨로프 하나.',
+      b:'일부러 작게 만들었습니다. 이것은 시퀀서이고, 소리는 시퀀스를 들리게 하기 위한 것이지 또 하나의 신디사이저가 되려는 것이 아닙니다. Shape는 삼각파에서 톱니파를 거쳐 펄스까지 끊김 없이 이동합니다.',
+      ex:['해보기: Decay를 짧게, Sustain을 0으로 두면 뜯는 듯한 소리가 되어 패턴을 따라가기 쉽습니다. Release가 길면 스텝들이 서로 뭉개집니다.','Glide는 다음 음으로 뛰지 않고 미끄러집니다. Gate가 100이면 음이 이어져서, 움직이는 것은 미끄러짐뿐입니다.','MIDI learn\uc73c\ub85c \ud558\ub4dc\uc6e8\uc5b4 \ub178\ube0c\ub97c \uc74c\uc0c9 \ucee8\ud2b8\ub864\uc5d0 \uc9c0\uc815\ud569\ub2c8\ub2e4. \ucf1c\uace0, \ucee8\ud2b8\ub864\uc744 \ud074\ub9ad\ud55c \ub2e4\uc74c \uc6d0\ud558\ub294 \ub178\ube0c\ub97c \uc6c0\uc9c1\uc774\uc138\uc694. \uc2dc\ud000\uc2a4\uac00 \ub3cc\uc544\uac00\ub294 \ub3d9\uc548 Cutoff\ub97c \uc190\uc73c\ub85c \ud6d1\ub294 \uac83\uc774 \uc774 \uc545\uae30\uc758 \uc7ac\ubbf8 \uc911 \uc808\ubc18\uc785\ub2c8\ub2e4.'] }
+  }
+},
+ar:{
+  helpLang:'لغة المساعدة',
+  hint:{ edit:'\u0627\u0646\u0642\u0631 \u0639\u0644\u0649 \u062e\u0637\u0648\u0629 \u0644\u062a\u062d\u062f\u064a\u062f\u0647\u0627 \u00B7 \u0648\u0627\u0646\u0642\u0631 \u0645\u0631\u0629 \u0623\u062e\u0631\u0649 \u0644\u062a\u0634\u063a\u064a\u0644\u0647\u0627 \u0623\u0648 \u0625\u064a\u0642\u0627\u0641\u0647\u0627',
+        fill:'\u0648\u0636\u0639 FILL \u2014 \u0623\u0645\u0633\u0650\u0643 \u062e\u0637\u0648\u0627\u062a \u0639\u0644\u0649 \u0627\u0644\u0634\u0628\u0643\u0629\u060c \u0623\u0648 \u0645\u0641\u0627\u062a\u064a\u062d Q A W S E D R F T G Y H U J I K\u060c \u0644\u0639\u0632\u0641\u0647\u0627' },
+  start:{
+    a:'مُتابِع خطوات من ست عشرة خطوة. لكل خطوة نغمة، وطول، وشدة، واحتمال أن تُعزف أصلًا، وعدد من التكرارات. شغّل Help لقراءة شرح كل منها.',
+    b:'لا تبدأ المتصفحات تشغيل الصوت إلا بعد نقرة منك. يُفضَّل استخدام سماعات الرأس، مع إبقاء مستوى الصوت معتدلًا في البداية.',
+    btn:'ابدأ المُتابِع'
+  },
+  help:{
+    seq:{ t:'ست عشرة خطوة، تُعزف بالترتيب، بلا توقف.',
+      b:'يحدد Tempo السرعة، ويحدد Last step الموضع الذي يعود منه النمط إلى بدايته. وضبط Last step على غير الرقم 16 هو أسرع طريقة لسماع ميزان غير اعتيادي: سبع خطوات على عدّ رباعي تحتاج خمسة عشر مازورة كي تتوافق من جديد.',
+      ex:['العلامة الزرقاء هي رأس القراءة. راقبها بدل الاكتفاء بالإنصات لترى ما الذي يفعله التسلسل.','\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a \u0627\u0644\u062c\u0627\u0647\u0632\u0629 \u0641\u064a \u0623\u0639\u0644\u0649 \u0627\u0644\u064a\u0645\u064a\u0646 \u0645\u062c\u0645\u0648\u0639\u0629 \u0623\u0645\u062b\u0644\u0629 \u0645\u0634\u0631\u0648\u062d\u0629. \u062d\u0645\u0651\u0644 \u0648\u0627\u062d\u062f\u064b\u0627 \u0645\u0646\u0647\u0627\u060c \u062b\u0645 \u063a\u064a\u0651\u0631 \u0634\u064a\u0626\u064b\u0627 \u0648\u0627\u062d\u062f\u064b\u0627 \u0648\u0627\u0633\u062a\u0645\u0639 \u0625\u0644\u0649 \u0645\u0627 \u062a\u063a\u064a\u0651\u0631.'] },
+    step:{ t:'خمسة أشياء تصنع الخطوة.',
+      b:'Note هي طبقة الصوت. و Gate هو مدة بقائها، وعند 100 تتصل بالخطوة التالية بدل أن تُفلَت. و Velocity هي الشدة. و Probability هو احتمال أن تُعزف من الأساس. و Division يكرر الخطوة داخل حيّزها نفسه.',
+      ex:['قيمة Probability هي ما يفصل المُتابِع عن التسجيل. عند 100% تحصل على نمط، وعند 60% تحصل على نمط لا يتكرر مرتين على النحو ذاته، وهذا الفرق هو جوهر الآلة كلها.','الخطوة المحاطة بإطار وردي متقطع تخطّاها احتمالها الخاص. هذا قرار من الآلة وليس عطلًا.'] },
+    voice:{ t:'مذبذب واحد، ومرشِّح واحد، ومغلِّف واحد.',
+      b:'صغير عن قصد. هذه آلة تسلسل، والصوت هنا كي يجعل التسلسل مسموعًا لا ليكون مركِّبًا ثانيًا. ويتنقل Shape بسلاسة من الموجة المثلثية إلى المنشارية إلى النبضية.',
+      ex:['جرِّب: Decay قصير مع Sustain عند الصفر يعطي نقرة، فيسهل تتبع النمط. و Release الطويل يجعل الخطوات تتداخل.','ينزلق Glide من نغمة إلى التالية بدل أن يقفز. ومع Gate عند 100 تتصل النغمات فلا يبقى متحركًا سوى الانزلاق.','\u064a\u0631\u0628\u0637 MIDI learn \u0645\u0641\u062a\u0627\u062d\u064b\u0627 \u0645\u0627\u062f\u064a\u064b\u0627 \u0628\u0623\u064a \u0639\u0646\u0635\u0631 \u0645\u0646 \u0639\u0646\u0627\u0635\u0631 \u0627\u0644\u0635\u0648\u062a. \u0634\u063a\u0651\u0644\u0647\u060c \u062b\u0645 \u0627\u0646\u0642\u0631 \u0639\u0646\u0635\u0631\u064b\u0627\u060c \u062b\u0645 \u062d\u0631\u0651\u0643 \u0627\u0644\u0645\u0641\u062a\u0627\u062d \u0627\u0644\u0630\u064a \u062a\u0631\u064a\u062f\u0647. \u0648\u0645\u0633\u062d Cutoff \u0628\u064a\u062f\u0643 \u0648\u0627\u0644\u062a\u0633\u0644\u0633\u0644 \u064a\u0639\u0645\u0644 \u0647\u0648 \u0645\u0639\u0638\u0645 \u0645\u062a\u0639\u0629 \u0627\u0644\u0622\u0644\u0629.'] }
+  }
+},
+zh:{
+  helpLang:'帮助语言',
+  hint:{ edit:'\u70b9\u4e00\u4e0b\u9009\u4e2d\u67d0\u4e00\u6b65 \u00B7 \u518d\u70b9\u4e00\u4e0b\u5f00\u542f\u6216\u5173\u95ed\u5b83',
+        fill:'FILL \u6a21\u5f0f \u2014 \u6309\u4f4f\u7f51\u683c\u4e0a\u7684\u6b65\uff0c\u6216\u8005 Q A W S E D R F T G Y H U J I K \u952e\uff0c\u5c31\u4f1a\u6f14\u594f\u5b83\u4eec' },
+  start:{
+    a:'一台十六步音序器。每一步都有音高、长度、力度、发声的概率，以及重复的次数。打开 Help 可以阅读每一项的说明。',
+    b:'浏览器只有在你点击之后才会开始播放声音。建议戴耳机，并且一开始把音量调得适中一些。',
+    btn:'启动音序器'
+  },
+  help:{
+    seq:{ t:'十六步，按顺序，一直循环。',
+      b:'Tempo 决定速度，Last step 决定这个模式在哪里绕回开头。把 Last step 设成 16 以外的数字，是最快听到不规则拍子的办法：七步对上四拍的数法，要十五小节才会重新对齐。',
+      ex:['蓝色的标记是播放指针。与其只用耳朵听，不如盯着它看，就能明白这条序列在做什么。','\u53f3\u4e0a\u89d2\u7684\u9884\u8bbe\u5217\u8868\u662f\u4e00\u7ec4\u73b0\u6210\u7684\u4f8b\u5b50\u3002\u8f7d\u5165\u4e00\u4e2a\uff0c\u7136\u540e\u53ea\u6539\u4e00\u6837\u4e1c\u897f\uff0c\u542c\u542c\u662f\u4ec0\u4e48\u53d8\u4e86\u3002'] },
+    step:{ t:'五样东西构成一步。',
+      b:'Note 是音高。Gate 是它保持多久，设成 100 时会连到下一步而不松开。Velocity 是响度。Probability 是它究竟会不会发声的概率。Division 则在这一步自己的格子里重复它。',
+      ex:['Probability 正是音序器和录音的分界。设成 100% 你得到一个固定模式；设成 60% 你得到一个永远不完全重复的模式，而这个差别就是这件乐器的全部意义。','带粉色虚线框的那一步，是被它自己的概率跳过了。那是机器在做决定，不是故障。'] },
+    voice:{ t:'一个振荡器，一个滤波器，一条包络。',
+      b:'刻意做得很小。这是一台音序器，声音在这里是为了让序列能被听见，而不是要当第二台合成器。Shape 会从三角波经锯齿波连续过渡到脉冲波。',
+      ex:['试试：Decay 短、Sustain 归零，就得到一个拨奏般的音，模式会很好跟。Release 长了，各步之间就糊在一起。','Glide 会从一个音滑到下一个，而不是直接跳过去。当 Gate 设成 100，音符互相连起来，唯一在动的就只有那道滑音。','MIDI learn \u53ef\u4ee5\u628a\u786c\u4ef6\u65cb\u94ae\u6307\u5b9a\u7ed9\u4efb\u4f55\u4e00\u4e2a\u58f0\u97f3\u65cb\u94ae\u3002\u6253\u5f00\u5b83\uff0c\u70b9\u51fb\u4e00\u4e2a\u65cb\u94ae\uff0c\u7136\u540e\u8f6c\u52a8\u4f60\u60f3\u7528\u7684\u90a3\u4e2a\u3002\u5e8f\u5217\u8dd1\u7740\u7684\u65f6\u5019\u7528\u624b\u626b Cutoff\uff0c\u5927\u534a\u7684\u4e50\u8da3\u90fd\u5728\u8fd9\u91cc\u3002'] }
+  }
+},
+ja:{
+  helpLang:'ヘルプの言語',
+  hint:{ edit:'\u30b9\u30c6\u30c3\u30d7\u3092\u30bf\u30c3\u30d7\u3059\u308b\u3068\u9078\u629e\u3055\u308c\u3001\u3082\u3046\u4e00\u5ea6\u30bf\u30c3\u30d7\u3059\u308b\u3068\u30aa\u30f3\u30aa\u30d5\u304c\u5207\u308a\u66ff\u308f\u308a\u307e\u3059',
+        fill:'FILL \u30e2\u30fc\u30c9 \u2014 \u30b0\u30ea\u30c3\u30c9\u4e0a\u306e\u30b9\u30c6\u30c3\u30d7\u3001\u307e\u305f\u306f Q A W S E D R F T G Y H U J I K \u30ad\u30fc\u3092\u62bc\u3055\u3048\u3066\u3044\u308b\u3042\u3044\u3060\u3001\u305d\u308c\u3089\u304c\u9cf4\u308a\u307e\u3059' },
+  start:{
+    a:'16 ステップのシーケンサーです。どのステップにも音程、長さ、強さ、そもそも鳴るかどうかの確率、そして繰り返しの回数があります。Help をオンにするとそれぞれの説明が読めます。',
+    b:'ブラウザはクリックされてからでないと音を鳴らせません。ヘッドフォンの使用をおすすめします。最初は音量を控えめにしておいてください。',
+    btn:'シーケンサーを起動'
+  },
+  help:{
+    seq:{ t:'16 のステップを順番に、いつまでも。',
+      b:'Tempo は速さを、Last step はパターンがどこで先頭に戻るかを決めます。Last step を 16 以外にするのが、変拍子をいちばん手早く聴く方法です。7 ステップを 4 拍で数えると、もとの位置に戻るまで 15 小節かかります。',
+      ex:['青い印が再生位置です。耳だけに頼らずこれを見ていると、シーケンスが何をしているのかが分かります。','\u53f3\u4e0a\u306e\u30d7\u30ea\u30bb\u30c3\u30c8\u4e00\u89a7\u306f\u3001\u4f5c\u4f8b\u96c6\u3067\u3059\u3002\u3072\u3068\u3064\u8aad\u307f\u8fbc\u3093\u3067\u304b\u3089\u3001\u3069\u3053\u304b\u4e00\u30f6\u6240\u3060\u3051\u5909\u3048\u3066\u3001\u4f55\u304c\u52d5\u3044\u305f\u304b\u3092\u8074\u3044\u3066\u307f\u3066\u304f\u3060\u3055\u3044\u3002'] },
+    step:{ t:'ステップは 5 つの要素でできています。',
+      b:'Note は音程です。Gate はどれだけ保つかで、100 にすると離さずに次のステップへつながります。Velocity は強さ、Probability はそもそも鳴る確率、Division はそのステップの枠の中で何回繰り返すかです。',
+      ex:['シーケンサーと録音を分けているのが Probability です。100% ならパターンになり、60% なら二度と同じにならないパターンになります。この違いこそがこの楽器の要点です。','ピンクの破線で囲まれたステップは、自分の確率によって飛ばされたものです。故障ではなく、機械が決めた結果です。'] },
+    voice:{ t:'オシレーター 1 つ、フィルター 1 つ、エンベロープ 1 つ。',
+      b:'あえて小さくしてあります。これはシーケンサーであり、音はシーケンスを聴こえるようにするためのもので、2 台目のシンセサイザーになるためのものではありません。Shape は三角波からのこぎり波、パルス波へと途切れなく変わります。',
+      ex:['試してみる：Decay を短く Sustain をゼロにすると弾いたような音になり、パターンを追いやすくなります。Release が長いとステップどうしがにじみます。','Glide は次の音へ跳ばずに滑っていきます。Gate が 100 だと音がつながるので、動いて聞こえるのは滑りだけになります。','MIDI learn \u3067\u30cf\u30fc\u30c9\u30a6\u30a7\u30a2\u306e\u30ce\u30d6\u3092\u58f0\u306e\u30b3\u30f3\u30c8\u30ed\u30fc\u30eb\u306b\u5272\u308a\u5f53\u3066\u3089\u308c\u307e\u3059\u3002\u30aa\u30f3\u306b\u3057\u3066\u30b3\u30f3\u30c8\u30ed\u30fc\u30eb\u3092\u30af\u30ea\u30c3\u30af\u3057\u3001\u4f7f\u3044\u305f\u3044\u30ce\u30d6\u3092\u52d5\u304b\u3057\u3066\u304f\u3060\u3055\u3044\u3002\u30b7\u30fc\u30b1\u30f3\u30b9\u304c\u9cf4\u3063\u3066\u3044\u308b\u9593\u306b Cutoff \u3092\u624b\u3067\u30b9\u30a4\u30fc\u30d7\u3059\u308b\u306e\u304c\u3001\u3053\u306e\u697d\u5668\u306e\u9762\u767d\u3055\u306e\u534a\u5206\u3067\u3059\u3002'] }
+  }
+}
+};
+
+const LANGS = [
+  { id:'en', label:'English' },
+  { id:'es', label:'Espa\u00f1ol' },
+  { id:'ko', label:'\ud55c\uad6d\uc5b4' },
+  { id:'ar', label:'\u0627\u0644\u0639\u0631\u0628\u064a\u0629', rtl:true },
+  { id:'zh', label:'\u4e2d\u6587' },
+  { id:'ja', label:'\u65e5\u672c\u8a9e' }
+];
+let lang = 'en';
+const isRTL = () => !!(LANGS.find(l => l.id === lang) || {}).rtl;
+
+function T(path){
+  const walk = root => path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), root);
+  const v = walk(I18N[lang]);
+  return v === undefined ? walk(I18N.en) : v;
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const NOTE_NAMES = ['C','C\u266F','D','D\u266F','E','F','F\u266F','G','G\u266F','A','A\u266F','B'];
+const noteName = n => NOTE_NAMES[((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1);
+const NUM = v => v.toFixed(2);
+const HZ  = v => v < 1000 ? v.toFixed(0) + ' Hz' : (v / 1000).toFixed(2) + ' kHz';
+const SEC = v => v < 1 ? (v * 1000).toFixed(0) + ' ms' : v.toFixed(2) + ' s';
+
+const NSTEPS = 16;
+const steps = [];
+for (let i = 0; i < NSTEPS; i++){
+  steps.push({ on:i % 4 === 0, note:60, gate:50, vel:100, prob:100, div:1 });
+}
+
+let bpm = 110, lastStep = 16;
+let sel = 0;
+let playing = false;
+
+const voice = {
+  shape:0.5, width:0.5, oct:0,
+  cut:4000, res:2, velCut:0.5,
+  a:0.005, d:0.25, s:0, r:0.15,
+  glide:0, master:0.65
+};
+
+/* voice control ranges, mapped through the same log/linear helpers as ADrum */
+const VCTL = {
+  shape:{ min:0, max:1, fmt:v => v < 0.03 ? 'Tri' : v > 0.97 ? 'Pulse' : Math.abs(v - 0.5) < 0.02 ? 'Saw' : NUM(v) },
+  width:{ min:0.05, max:0.95, fmt:v => (v * 100).toFixed(0) + '%' },
+  oct:{ min:-2, max:2, step:1, fmt:v => (v > 0 ? '+' : '') + v.toFixed(0) },
+  cut:{ min:30, max:16000, log:true, fmt:HZ },
+  res:{ min:0.5, max:16, log:true, fmt:NUM },
+  velCut:{ min:0, max:1, fmt:v => v < 0.02 ? 'Off' : NUM(v) },
+  a:{ min:0.001, max:2, log:true, fmt:SEC },
+  d:{ min:0.005, max:3, log:true, fmt:SEC },
+  s:{ min:0, max:1, fmt:NUM },
+  r:{ min:0.005, max:4, log:true, fmt:SEC },
+  glide:{ min:0, max:1.5, pow:3, fmt:v => v < 0.005 ? 'Off' : SEC(v) },
+  master:{ min:0, max:1, fmt:NUM }
+};
+
+function toNorm(c, v){
+  if (c.log) return Math.log(v / c.min) / Math.log(c.max / c.min);
+  const t = (v - c.min) / (c.max - c.min);
+  return c.pow ? Math.pow(Math.max(0, t), 1 / c.pow) : t;
+}
+function fromNorm(c, t){
+  t = Math.min(1, Math.max(0, t));
+  let v = c.log ? c.min * Math.pow(c.max / c.min, t)
+                : c.min + (c.pow ? Math.pow(t, c.pow) : t) * (c.max - c.min);
+  if (c.step) v = Math.round(v / c.step) * c.step;
+  return v;
+}
+
+/* ============================================================
+   AUDIO
+   ============================================================ */
+let actx = null, node = null, scopeAn = null, scopeData = null, running = false;
+
+function sendV(n, v){ if (node) node.port.postMessage({ t:'p', n:n, v:v }); }
+
+async function addWorklet(ctx, src){
+  const tried = [];
+  try {
+    const url = URL.createObjectURL(new Blob([src], { type:'application/javascript' }));
+    await ctx.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    return;
+  } catch (e){ tried.push('blob: ' + e.message); }
+  try {
+    const b64 = btoa(unescape(encodeURIComponent(src)));
+    await ctx.audioWorklet.addModule('data:application/javascript;base64,' + b64);
+    return;
+  } catch (e){ tried.push('data: ' + e.message); }
+  throw new Error(tried.join(' | '));
+}
+
+async function startAudio(){
+  if (running) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  await addWorklet(actx, document.getElementById('workletCode').textContent);
+
+  node = new AudioWorkletNode(actx, 'sixteen-max', { numberOfInputs:0, numberOfOutputs:1, outputChannelCount:[2] });
+
+  const safety = actx.createDynamicsCompressor();
+  safety.threshold.value = -6; safety.knee.value = 6;
+  safety.ratio.value = 12; safety.attack.value = 0.003; safety.release.value = 0.12;
+  node.connect(safety);
+  safety.connect(actx.destination);
+
+  scopeAn = actx.createAnalyser();
+  scopeAn.fftSize = 2048; scopeAn.smoothingTimeConstant = 0;
+  node.connect(scopeAn);
+  scopeData = new Float32Array(scopeAn.fftSize);
+
+  for (const k in voice) sendV(k, voice[k]);
+  running = true;
+  if (actx.state === 'suspended') await actx.resume();
+}
+
+/* ============================================================
+   SCHEDULER
+   The clock is actx.currentTime, never a timer. A timer only decides *when to
+   look ahead*; every note is stamped with an exact audio-clock time and the
+   worklet places it on the right sample. That is why the pattern does not
+   drift when the browser is busy, and why it survives a phone locking up for
+   a moment: the timer can be late without the music being late.
+   ============================================================ */
+const LOOKAHEAD = 0.12;      // seconds of music scheduled in advance
+const TICK = 25;             // how often we top that buffer up, in ms
+
+let nextStepTime = 0;        // audio-clock time of the next step
+let cursor = 0;              // which step that will be
+let timer = null;
+const drawQueue = [];        // {step, time, fired} for the playhead
+
+function stepDuration(){ return 60 / bpm / 4; }   // sixteenth notes
+
+function nextIndex(i){ return (i + 1) % Math.max(1, lastStep); }
+
+/* Probability for the *next* step has to be known before the current step can
+   tie into it, so the roll is made once, cached, and reused when that step
+   comes around. Rolling twice would let a step tie into a note that then
+   never happens. */
+const rolled = {};
+function willFire(i){
+  const st = steps[i];
+  if (!st.on) return false;
+  if (rolled[i] === undefined) rolled[i] = st.prob >= 100 || Math.random() * 100 < st.prob;
+  return rolled[i];
+}
+
+let carryTie = false;        // did the previous step tie into this one
+
+/* ---------- fill ----------
+   While steps are held, the sequencer stops reading the pattern and cycles
+   through the held steps instead, one per slot, in grid order. The clock never
+   changes, so a fill lands in time and drops back into the pattern exactly
+   where the pattern would have been. */
+const heldSteps = new Set();
+let fillOrder = [], fillPos = 0;
+let fillArmed = false;
+
+function rebuildFill(){
+  fillOrder = Array.from(heldSteps).sort((a, b) => a - b);
+  fillPos = 0;
+}
+/* which step the next slot should play */
+function sourceStep(i){
+  if (!fillOrder.length) return i;
+  const s = fillOrder[fillPos % fillOrder.length];
+  fillPos++;
+  return s;
+}
+
+function scheduler(){
+  if (!playing) return;
+  const now = actx.currentTime;
+  while (nextStepTime < now + LOOKAHEAD){
+    // consume the pre-rolled decision for this step if one was made
+    const pre = rolled[cursor];
+    delete rolled[cursor];
+    // a fill substitutes which step's settings get played, but not when
+    const src = sourceStep(cursor);
+    carryTie = scheduleStepWith(src, nextStepTime, src === cursor ? pre : undefined,
+                                carryTie, cursor);
+    nextStepTime += stepDuration();
+    cursor = nextIndex(cursor);
+  }
+}
+
+/* the body of a step, accepting a decision already made by willFire.
+   `i` is whose settings are played; `at` is where the playhead should show,
+   which differ only during a fill. */
+function scheduleStepWith(i, when, pre, tiedInto, at){
+  const st = steps[i];
+  const dur = stepDuration();
+  const fired = pre !== undefined ? pre
+              : (st.on && (st.prob >= 100 || Math.random() * 100 < st.prob));
+
+  drawQueue.push({ step:(at === undefined ? i : at), src:i, time:when, fired:fired, on:st.on });
+  if (!fired) return false;
+
+  const n = st.div;
+  const slot = dur / n;
+  // during a fill the next thing to sound is the next held step, not the next
+  // grid step, so a tie has to ask about that one instead
+  const nxt = fillOrder.length ? fillOrder[fillPos % fillOrder.length] : nextIndex(i);
+  // A step cannot tie into itself. Holding one step in a fill, or setting Last
+  // step to 1, would otherwise leave the note-off unsent forever: the envelope
+  // never retriggers, decays to the Sustain level, and at the default Sustain
+  // of zero that is silence. Falling back to a 98% gate is what Tie means
+  // musically anyway when there is no next note to tie to.
+  const tie = st.gate >= 100 && nxt !== i && willFire(nxt);
+
+  for (let k = 0; k < n; k++){
+    const t0 = when + slot * k;
+    const isLast = k === n - 1;
+    // Only the very first hit of a step can inherit a tie from the step
+    // before. Ratchets within a step always re-articulate, otherwise a
+    // ratcheted tie would be one long note and the repeats would vanish.
+    const asTie = tiedInto && k === 0;
+    node.port.postMessage({ t:'ev', on:true, tie:asTie, note:st.note, vel:st.vel / 127, time:t0 });
+    if (!(isLast && tie)){
+      const hold = slot * Math.min(0.98, st.gate / 100);
+      node.port.postMessage({ t:'ev', on:false, time:t0 + hold });
+    }
+  }
+  return tie;
+}
+
+function play(){
+  if (!running || playing) return;
+  playing = true;
+  cursor = 0;
+  carryTie = false;
+  for (const k in rolled) delete rolled[k];
+  nextStepTime = actx.currentTime + 0.06;   // a beat of headroom before step 1
+  drawQueue.length = 0;
+  scheduler();
+  timer = setInterval(scheduler, TICK);
+  paintTransport();
+}
+function stop(){
+  playing = false;
+  if (timer){ clearInterval(timer); timer = null; }
+  if (node){ node.port.postMessage({ t:'flush' }); node.port.postMessage({ t:'panic' }); }
+  drawQueue.length = 0;
+  head = -1; headMiss = false;
+  paintGrid(); paintTransport();
+}
+
+/* ============================================================
+   GRID
+   ============================================================ */
+let head = -1, headMiss = false;
+
+(function buildGrid(){
+  const g = document.getElementById('grid');
+  g.innerHTML = steps.map((s, i) =>
+    '<div class="st" data-i="' + i + '">' +
+      '<span class="prob"></span>' +
+      '<span class="n">' + (i + 1) + '</span>' +
+      '<span class="nt"></span>' +
+      '<span class="rt"></span>' +
+    '</div>').join('');
+  g.addEventListener('click', e => {
+    if (fillArmed) return;          // armed, the grid plays instead of editing
+    const el = e.target.closest('.st');
+    if (!el) return;
+    const i = +el.dataset.i;
+    // first tap selects, a second tap on the already-selected step toggles it
+    if (sel === i) steps[i].on = !steps[i].on;
+    else sel = i;
+    paintGrid(); paintDetail();
+  });
+})();
+
+const DIVTXT = { 1:'', 2:'\u00D72', 3:'\u00D73', 4:'\u00D74' };
+
+function paintGrid(){
+  document.querySelectorAll('#grid .st').forEach(el => {
+    const i = +el.dataset.i;
+    const s = steps[i];
+    el.classList.toggle('on', s.on);
+    el.classList.toggle('sel', sel === i);
+    el.classList.toggle('head', head === i);
+    el.classList.toggle('miss', head === i && headMiss);
+    el.classList.toggle('past', i >= lastStep);
+    el.classList.toggle('held', heldSteps.has(i));
+    el.querySelector('.nt').textContent = noteName(s.note);
+    el.querySelector('.rt').textContent = DIVTXT[s.div] || '';
+    el.querySelector('.prob').textContent = s.prob < 100 ? s.prob + '%' : '';
+  });
+  document.getElementById('seqWhat').textContent = lastStep + (lastStep === 1 ? ' step' : ' steps');
+}
+
+/* ============================================================
+   DETAIL EDITOR
+   ============================================================ */
+const SCTL = {
+  note:{ get:s => s.note, set:(s, v) => s.note = v, fmt:noteName },
+  gate:{ get:s => s.gate, set:(s, v) => s.gate = v,
+         fmt:v => v >= 100 ? 'Tie' : v + '%' },
+  vel:{ get:s => s.vel, set:(s, v) => s.vel = v, fmt:v => String(v) },
+  prob:{ get:s => s.prob, set:(s, v) => s.prob = v, fmt:v => v + '%' }
+};
+
+for (const k in SCTL){
+  const inp = document.getElementById('si-' + k);
+  inp.addEventListener('input', () => {
+    SCTL[k].set(steps[sel], +inp.value);
+    paintDetail(); paintGrid();
+  });
+}
+
+(function wireDiv(){
+  const box = document.getElementById('divSeg');
+  box.querySelectorAll('button').forEach(b => b.addEventListener('click', e => {
+    steps[sel].div = +b.dataset.v;
+    paintDetail(); paintGrid();
+    e.currentTarget.blur();
+  }));
+})();
+
+document.getElementById('stepOn').addEventListener('click', e => {
+  steps[sel].on = !steps[sel].on;
+  paintDetail(); paintGrid();
+  e.currentTarget.blur();
+});
+
+document.getElementById('copyPrev').addEventListener('click', e => {
+  const src = steps[sel];
+  for (let i = 0; i < NSTEPS; i++){
+    if (i === sel) continue;
+    steps[i].note = src.note; steps[i].gate = src.gate;
+    steps[i].vel = src.vel; steps[i].prob = src.prob; steps[i].div = src.div;
+  }
+  paintGrid(); paintDetail();
+  e.currentTarget.blur();
+});
+
+document.getElementById('clearStep').addEventListener('click', e => {
+  const s = steps[sel];
+  s.note = 60; s.gate = 50; s.vel = 100; s.prob = 100; s.div = 1;
+  paintGrid(); paintDetail();
+  e.currentTarget.blur();
+});
+
+function paintDetail(){
+  const s = steps[sel];
+  document.getElementById('detailNum').textContent = 'Step ' + (sel + 1);
+  for (const k in SCTL){
+    document.getElementById('si-' + k).value = SCTL[k].get(s);
+    document.getElementById('sv-' + k).textContent = SCTL[k].fmt(SCTL[k].get(s));
+  }
+  document.querySelectorAll('#divSeg button').forEach(b =>
+    b.classList.toggle('on', +b.dataset.v === s.div));
+  const b = document.getElementById('stepOn');
+  b.classList.toggle('on', s.on);
+  b.textContent = s.on ? 'On' : 'Off';
+}
+
+/* ============================================================
+   PRESETS
+   Each one demonstrates a single idea, and every one can be taken apart on
+   the panel that made it. Names stay in English like the control labels.
+   ============================================================ */
+
+/* walk a scale upward: intervals repeat, the octave climbs with them */
+function scaleUp(root, iv, n){
+  const out = [];
+  for (let i = 0; i < n; i++){
+    out.push(root + Math.floor(i / iv.length) * 12 + iv[i % iv.length]);
+  }
+  return out;
+}
+const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+const MINOR_PENT = [0, 3, 5, 7, 10];
+
+/* fill 16 steps from a note list; anything past the list is left off */
+function fromNotes(notes, extra){
+  return notes.map(n => Object.assign({ on:true, note:n, gate:45, vel:100, prob:100, div:1 }, extra || {}));
+}
+
+const PRESETS = {
+  'Init': {
+    bpm:110, lastStep:16,
+    steps:Array.from({ length:16 }, (_, i) =>
+      ({ on:i % 4 === 0, note:60, gate:50, vel:100, prob:100, div:1 }))
+  },
+
+  /* C major, C4 up to C6. Fifteen notes, which is the point: a two octave
+     scale does not fit a sixteen step grid, so Last step lands on 15 and the
+     pattern turns over against a four beat count. */
+  'Two octave major': {
+    bpm:124, lastStep:15,
+    voice:{ shape:0.5, width:0.5, oct:0, cut:3500, res:2.2, velCut:0.4,
+            a:0.004, d:0.28, s:0, r:0.14, glide:0, master:0.6 },
+    steps:fromNotes(scaleUp(60, MAJOR, 15), { gate:42 })
+  },
+
+  /* A minor pentatonic, A3 up to A6. Five notes to the octave means three
+     octaves land on exactly sixteen steps. */
+  'Three octave minor': {
+    bpm:132, lastStep:16,
+    voice:{ shape:0.72, width:0.4, oct:0, cut:2600, res:3.4, velCut:0.5,
+            a:0.003, d:0.22, s:0, r:0.12, glide:0, master:0.58 },
+    steps:fromNotes(scaleUp(57, MINOR_PENT, 16), { gate:40 })
+  },
+
+  /* Every step is on, but only the four downbeats are certain. The skeleton
+     stays put while everything between it rearranges — the clearest way to
+     hear that a sequencer is deciding rather than replaying. */
+  'Probability': {
+    bpm:120, lastStep:16,
+    voice:{ shape:0.55, width:0.5, oct:-1, cut:1800, res:4.5, velCut:0.6,
+            a:0.002, d:0.2, s:0, r:0.1, glide:0, master:0.6 },
+    steps:[
+      { note:57, prob:100, vel:118 }, { note:64, prob:35, vel:80 },
+      { note:69, prob:55, vel:92 },   { note:64, prob:30, vel:76 },
+      { note:60, prob:100, vel:112 }, { note:67, prob:40, vel:84 },
+      { note:72, prob:60, vel:96 },   { note:67, prob:25, vel:72 },
+      { note:57, prob:100, vel:118 }, { note:64, prob:45, vel:88 },
+      { note:69, prob:50, vel:92 },   { note:76, prob:20, vel:70 },
+      { note:65, prob:100, vel:110 }, { note:72, prob:35, vel:82 },
+      { note:69, prob:55, vel:94 },   { note:64, prob:30, vel:74 }
+    ].map(s => Object.assign({ on:true, gate:38, div:1 }, s))
+  },
+
+  /* One note, sixteen times, with velocity climbing from almost nothing to
+     full. Nothing changes but how hard it is struck, and the filter opens
+     with it — the same note gets brighter as well as louder. */
+  'Velocity and filter': {
+    bpm:112, lastStep:16,
+    voice:{ shape:0.5, width:0.5, oct:0, cut:220, res:5.5, velCut:1,
+            a:0.003, d:0.42, s:0, r:0.2, glide:0, master:0.62 },
+    steps:Array.from({ length:16 }, (_, i) =>
+      ({ on:true, note:48, gate:45, vel:Math.round(8 + i * (119 / 15)), prob:100, div:1 }))
+  },
+
+  /* Division puts more than one hit inside a single step. The pattern below
+     climbs 1, 2, 3, 4 so the repeats are easy to count before they are used
+     musically. */
+  'Ratchets': {
+    bpm:104, lastStep:16,
+    voice:{ shape:0.8, width:0.32, oct:0, cut:3200, res:2.8, velCut:0.5,
+            a:0.002, d:0.16, s:0, r:0.1, glide:0, master:0.58 },
+    steps:[
+      { note:60, div:1 }, { note:60, div:2 }, { note:60, div:3 }, { note:60, div:4 },
+      { note:67, div:1 }, { note:67, div:2 }, { note:67, div:3 }, { note:67, div:4 },
+      { note:64, div:1 }, { note:64, div:2 }, { note:64, div:3 }, { note:64, div:4 },
+      { note:72, div:1 }, { note:72, div:4 }, { note:69, div:2 }, { note:65, div:4 }
+    ].map(s => Object.assign({ on:true, gate:42, vel:100, prob:100 }, s))
+  },
+
+  /* Every gate at Tie, so the sequence never lets go: one note that lasts
+     forever while its pitch, loudness and brightness step underneath it.
+     Sustain has to be up for this to sound at all, which is the lesson. */
+  'Tie drone': {
+    bpm:88, lastStep:16,
+    voice:{ shape:0.62, width:0.5, oct:-1, cut:400, res:6.5, velCut:0.85,
+            a:0.02, d:0.5, s:0.75, r:0.6, glide:0, master:0.55 },
+    steps:[
+      { note:45, vel:60 },  { note:57, vel:96 },  { note:52, vel:74 },  { note:60, vel:110 },
+      { note:48, vel:66 },  { note:60, vel:104 }, { note:55, vel:82 },  { note:64, vel:120 },
+      { note:45, vel:58 },  { note:55, vel:90 },  { note:52, vel:70 },  { note:63, vel:112 },
+      { note:50, vel:78 },  { note:62, vel:100 }, { note:57, vel:86 },  { note:53, vel:68 }
+    ].map(s => Object.assign({ on:true, gate:100, prob:100, div:1 }, s))
+  }
+};
+
+function applyPreset(name){
+  const P = PRESETS[name];
+  if (!P) return;
+
+  // stop anything held, so a fill from the last preset cannot leak into this one
+  releaseAllHeld();
+
+  bpm = P.bpm;
+  lastStep = P.lastStep;
+
+  for (let i = 0; i < NSTEPS; i++){
+    const src = P.steps[i];
+    const s = steps[i];
+    if (src){
+      s.on = src.on; s.note = src.note; s.gate = src.gate;
+      s.vel = src.vel; s.prob = src.prob; s.div = src.div;
+    } else {
+      // a preset shorter than the grid leaves the tail switched off rather
+      // than holding whatever the previous preset put there
+      s.on = false; s.note = 60; s.gate = 50; s.vel = 100; s.prob = 100; s.div = 1;
+    }
+  }
+
+  const V = P.voice || { shape:0.5, width:0.5, oct:0, cut:4000, res:2, velCut:0.5,
+                         a:0.005, d:0.25, s:0, r:0.15, glide:0, master:0.65 };
+  for (const k in VCTL){
+    if (!(k in V)) continue;
+    // through applyNorm so the slider, the readout and the engine all move
+    // together, exactly as they do for a drag or an incoming CC
+    applyNorm(k, toNorm(VCTL[k], V[k]));
+  }
+
+  if (sel >= NSTEPS) sel = 0;
+  if (cursor >= lastStep) cursor = 0;
+
+  // a preset moves the sliders under the hardware, so every mapped control
+  // has to be swept back onto its new value before it takes over again
+  for (const k in pickedUp) pickedUp[k] = false;
+  refreshBadges();
+
+  document.getElementById('bpm').value = bpm;
+  document.getElementById('bpmV').textContent = bpm + ' BPM';
+  document.getElementById('lastStep').value = lastStep;
+  document.getElementById('lastV').textContent = String(lastStep);
+
+  paintGrid(); paintDetail();
+}
+
+(function buildPresets(){
+  const s = document.getElementById('presetSel');
+  s.innerHTML = Object.keys(PRESETS).map(k => '<option>' + k + '</option>').join('');
+  s.addEventListener('change', () => { applyPreset(s.value); s.blur(); });
+})();
+
+/* ============================================================
+   TRANSPORT
+   ============================================================ */
+document.getElementById('playBtn').addEventListener('click', e => {
+  if (playing) stop(); else play();
+  e.currentTarget.blur();
+});
+
+(function wireTransport(){
+  const bpmI = document.getElementById('bpm'), bpmV = document.getElementById('bpmV');
+  bpmI.value = bpm; bpmV.textContent = bpm + ' BPM';
+  bpmI.addEventListener('input', () => {
+    bpm = +bpmI.value;
+    bpmV.textContent = bpm + ' BPM';
+  });
+
+  const lastI = document.getElementById('lastStep'), lastV = document.getElementById('lastV');
+  lastI.value = lastStep; lastV.textContent = String(lastStep);
+  lastI.addEventListener('input', () => {
+    lastStep = +lastI.value;
+    lastV.textContent = String(lastStep);
+    if (cursor >= lastStep) cursor = 0;
+    paintGrid();
+  });
+})();
+
+function paintTransport(){
+  const b = document.getElementById('playBtn');
+  b.textContent = playing ? 'Stop' : 'Play';
+  b.classList.toggle('play', !playing);
+  b.classList.toggle('on', playing);
+}
+
+/* ============================================================
+   VOICE CONTROLS
+   ============================================================ */
+/* MIDI learn state. Only the voice panel registers here. */
+const REG = {};
+const ccToParam = {}, paramToCC = {}, hwPos = {}, pickedUp = {};
+let midiLearn = false, learnArmed = null, midiSeen = false;
+const MAP_KEY = '16max.midimap.v1';
+
+const VLABEL = {
+  shape:'Shape', width:'Width', oct:'Octave', cut:'Cutoff', res:'Resonance',
+  velCut:'Vel \u2192 Cutoff', a:'Attack', d:'Decay', s:'Sustain', r:'Release',
+  glide:'Glide', master:'Master'
+};
+
+for (const k in VCTL){
+  const inp = document.getElementById('vi-' + k);
+  const lbl = document.getElementById('vv-' + k);
+  const c = VCTL[k];
+  const box = inp.closest('.ctl');
+
+  // the badge and the hardware marker are injected rather than written into
+  // the markup twelve times over
+  const badge = document.createElement('span');
+  badge.className = 'cc';
+  box.querySelector('.ctl-head').insertBefore(badge, box.querySelector('.v'));
+  const mark = document.createElement('span');
+  mark.className = 'hwmark';
+  box.appendChild(mark);
+  box.dataset.key = k;
+
+  REG[k] = { c:c, inp:inp, lbl:lbl, badge:badge, mark:mark, box:box, label:VLABEL[k] || k };
+
+  inp.value = toNorm(c, voice[k]);
+  lbl.textContent = c.fmt(voice[k]);
+  inp.addEventListener('input', () => {
+    // moving it by hand desyncs the hardware, so it has to pick up again
+    if (paramToCC[k] !== undefined && pickedUp[k]){
+      pickedUp[k] = false;
+      refreshBadges();
+    }
+    applyNorm(k, +inp.value, true);
+  });
+  box.addEventListener('click', () => { if (midiLearn) armControl(k); });
+}
+
+/* one place that moves a voice control, whichever direction the change came from */
+function applyNorm(k, t, fromUI){
+  const r = REG[k];
+  t = Math.min(1, Math.max(0, t));
+  voice[k] = fromNorm(r.c, t);
+  if (!fromUI) r.inp.value = t;
+  r.lbl.textContent = r.c.fmt(voice[k]);
+  sendV(k, voice[k]);
+}
+
+function saveMap(){
+  try { localStorage.setItem(MAP_KEY, JSON.stringify(ccToParam)); } catch (e) {}
+}
+function loadMap(){
+  try {
+    const raw = localStorage.getItem(MAP_KEY);
+    if (!raw) return;
+    const obj = JSON.parse(raw);
+    for (const cc in obj){
+      const k = obj[cc];
+      if (REG[k]){ ccToParam[cc] = k; paramToCC[k] = +cc; }
+    }
+  } catch (e) {}
+}
+
+function refreshBadges(){
+  for (const k in REG){
+    const r = REG[k];
+    const cc = paramToCC[k];
+    const waiting = cc !== undefined && !pickedUp[k] && hwPos[k] !== undefined;
+    r.badge.textContent = cc === undefined ? '' : 'CC' + cc;
+    r.badge.classList.toggle('waiting', waiting);
+    r.box.classList.toggle('armed', learnArmed === k);
+    if (waiting){
+      r.mark.style.display = 'block';
+      r.mark.style.left = (hwPos[k] * 100).toFixed(1) + '%';
+    } else r.mark.style.display = 'none';
+  }
+}
+
+function learnStatus(){
+  const el = document.getElementById('learnMsg');
+  if (!el) return;
+  const count = Object.keys(ccToParam).length;
+  const tally = count ? count + (count === 1 ? ' control mapped' : ' controls mapped') : 'nothing mapped yet';
+  if (!navigator.requestMIDIAccess) el.textContent = 'This browser has no Web MIDI. Try Chrome or Edge.';
+  else if (learnArmed) el.textContent = 'Waiting \u2014 move a knob or fader for ' + REG[learnArmed].label +
+      '. Click it again to unassign, or press Escape.';
+  else if (!midiSeen) el.textContent = 'No controller messages yet. Connect one, then click a voice control \u2014 ' + tally + '.';
+  else el.textContent = 'Click any voice control, then move a knob on your controller \u2014 ' + tally + '.';
+}
+
+function armControl(k){
+  if (learnArmed === k){
+    const cc = paramToCC[k];
+    if (cc !== undefined){
+      delete ccToParam[cc]; delete paramToCC[k];
+      delete hwPos[k]; delete pickedUp[k];
+      saveMap();
+    }
+    learnArmed = null;
+  } else learnArmed = k;
+  refreshBadges(); learnStatus();
+}
+
+function bindCC(cc, k){
+  const old = ccToParam[cc];                      // one knob drives one control
+  if (old !== undefined) delete paramToCC[old];
+  const prev = paramToCC[k];
+  if (prev !== undefined) delete ccToParam[prev];
+  ccToParam[cc] = k; paramToCC[k] = cc;
+  pickedUp[k] = true;
+  learnArmed = null;
+  saveMap(); refreshBadges(); learnStatus();
+}
+
+function clearAllCC(){
+  for (const x in ccToParam) delete ccToParam[x];
+  for (const x in paramToCC) delete paramToCC[x];
+  for (const x in hwPos) delete hwPos[x];
+  for (const x in pickedUp) delete pickedUp[x];
+  saveMap(); learnArmed = null;
+  refreshBadges(); learnStatus();
+}
+
+function setLearn(on){
+  midiLearn = on;
+  if (!on) learnArmed = null;
+  document.body.classList.toggle('learning', on);
+  const b = document.getElementById('learnBtn');
+  b.classList.toggle('on', on);
+  b.setAttribute('aria-pressed', String(on));
+  refreshBadges(); learnStatus();
+}
+
+/* Soft takeover, same as 4LS and ADrum: after a reload or a preset change the
+   hardware is no longer where the slider is, so it does nothing until you
+   sweep it onto the current value and pick it up. */
+function handleCC(cc, val){
+  midiSeen = true;
+  if (midiLearn && learnArmed){ bindCC(cc, learnArmed); return; }
+  const k = ccToParam[cc];
+  if (!k || !REG[k]){ if (midiLearn) learnStatus(); return; }
+
+  const t = val / 127;
+  const cur = toNorm(REG[k].c, voice[k]);
+  const prev = hwPos[k];
+
+  if (!pickedUp[k] && prev !== undefined){
+    if (Math.abs(t - cur) < 0.02 || (prev < cur && t >= cur) || (prev > cur && t <= cur)) pickedUp[k] = true;
+  }
+  hwPos[k] = t;
+
+  if (pickedUp[k]) applyNorm(k, t);
+  refreshBadges();
+  if (midiLearn) learnStatus();
+}
+
+document.getElementById('learnBtn').addEventListener('click', e => { setLearn(!midiLearn); e.currentTarget.blur(); });
+document.getElementById('learnDone').addEventListener('click', e => { setLearn(false); e.currentTarget.blur(); });
+document.getElementById('learnClear').addEventListener('click', e => { clearAllCC(); e.currentTarget.blur(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && midiLearn){
+    if (learnArmed){ learnArmed = null; refreshBadges(); learnStatus(); }
+    else setLearn(false);
+  }
+});
+
+loadMap(); refreshBadges(); learnStatus();
+
+/* ============================================================
+   FILL INPUT
+   Three ways in, all feeding the same held set: the top two keyboard rows,
+   the grid itself once Fill is armed, and MIDI notes C2..D#3.
+   ============================================================ */
+const FILLKEYS = ['q','a','w','s','e','d','r','f','t','g','y','h','u','j','i','k'];
+
+function holdStep(i){
+  if (i < 0 || i >= NSTEPS) return;
+  if (heldSteps.has(i)) return;
+  heldSteps.add(i);
+  rebuildFill();
+  paintGrid();
+}
+function releaseStep(i){
+  if (!heldSteps.delete(i)) return;
+  rebuildFill();
+  paintGrid();
+}
+function releaseAllHeld(){
+  if (!heldSteps.size) return;
+  heldSteps.clear();
+  rebuildFill();
+  paintGrid();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT') return;
+  const i = FILLKEYS.indexOf(e.key.toLowerCase());
+  if (i < 0) return;
+  // the keys only play while Fill is armed, so the mode shown on screen is
+  // always the mode you are actually in
+  if (!fillArmed) return;
+  e.preventDefault();
+  holdStep(i);
+});
+document.addEventListener('keyup', e => {
+  const i = FILLKEYS.indexOf(e.key.toLowerCase());
+  if (i >= 0) releaseStep(i);
+});
+// a key held while the window loses focus would otherwise stay stuck down
+window.addEventListener('blur', releaseAllHeld);
+
+function paintHint(){
+  const el = document.getElementById('gridHint');
+  if (!el) return;
+  el.textContent = T('hint.' + (fillArmed ? 'fill' : 'edit'));
+  el.setAttribute('lang', lang);
+  el.setAttribute('dir', isRTL() ? 'rtl' : 'ltr');
+}
+
+(function wireFillButton(){
+  const b = document.getElementById('fillBtn');
+  b.addEventListener('click', e => {
+    fillArmed = !fillArmed;
+    document.body.classList.toggle('filling', fillArmed);
+    b.classList.toggle('on', fillArmed);
+    if (!fillArmed) releaseAllHeld();
+    paintHint();
+    e.currentTarget.blur();
+  });
+})();
+
+/* touch: while Fill is armed, the grid holds steps instead of selecting them */
+(function fillTouch(){
+  const g = document.getElementById('grid');
+  const touches = new Map();          // pointerId -> step index
+
+  function stepUnder(x, y){
+    const el = document.elementFromPoint(x, y);
+    const st = el && el.closest ? el.closest('.st') : null;
+    return st ? +st.dataset.i : null;
+  }
+  function releaseIfLast(id, i){
+    if (i === null) return;
+    for (const [other, oi] of touches) if (other !== id && oi === i) return;
+    releaseStep(i);
+  }
+
+  g.addEventListener('pointerdown', e => {
+    if (!fillArmed) return;
+    const el = e.target.closest('.st'); if (!el) return;
+    e.preventDefault();
+    try { g.setPointerCapture(e.pointerId); } catch (_) {}
+    const i = +el.dataset.i;
+    touches.set(e.pointerId, i);
+    holdStep(i);
+  });
+  g.addEventListener('pointermove', e => {
+    if (!touches.has(e.pointerId)) return;
+    e.preventDefault();
+    const prev = touches.get(e.pointerId);
+    const i = stepUnder(e.clientX, e.clientY);
+    if (i === prev) return;
+    touches.set(e.pointerId, i);
+    releaseIfLast(e.pointerId, prev);
+    if (i !== null) holdStep(i);
+  });
+  const lift = e => {
+    if (!touches.has(e.pointerId)) return;
+    const i = touches.get(e.pointerId);
+    touches.delete(e.pointerId);
+    releaseIfLast(e.pointerId, i);
+    try { g.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  g.addEventListener('pointerup', lift);
+  g.addEventListener('pointercancel', lift);
+
+  /* iOS Safari runs its own pinch and double-tap zoom on top of touch-action,
+     and a two-handed fill reads to it as a gesture. Scoped to the grid so the
+     rest of the page can still be zoomed for reading help text. */
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(t =>
+    g.addEventListener(t, e => { if (fillArmed) e.preventDefault(); }));
+  g.addEventListener('touchstart', e => {
+    if (fillArmed && e.touches.length > 1) e.preventDefault();
+  }, { passive:false });
+  g.addEventListener('touchmove', e => { if (fillArmed) e.preventDefault(); }, { passive:false });
+})();
+
+/* ============================================================
+   MIDI — hold steps with C2..D#3
+   ============================================================ */
+(function initMidi(){
+  const label = document.getElementById('midiLabel');
+  if (!navigator.requestMIDIAccess){ label.textContent = 'MIDI: not supported'; return; }
+  navigator.requestMIDIAccess().then(access => {
+    function bind(){
+      const names = [];
+      access.inputs.forEach(inp => {
+        names.push(inp.name);
+        inp.onmidimessage = m => {
+          const [st, d1, d2] = m.data;
+          const cmd = st & 0xf0;
+          if (cmd === 0xb0){ handleCC(d1, d2); return; }
+          // C2 is MIDI 36; sixteen semitones up lands on D#3 = 51
+          if (d1 < 36 || d1 > 51) return;
+          if (cmd === 0x90 && d2 > 0) holdStep(d1 - 36);
+          else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) releaseStep(d1 - 36);
+        };
+      });
+      label.textContent = names.length ? 'MIDI: ' + names[0] : 'MIDI: none';
+      learnStatus();
+    }
+    bind();
+    access.onstatechange = bind;
+  }).catch(() => { label.textContent = 'MIDI: blocked'; });
+})();
+
+/* ============================================================
+   DRAW
+   ============================================================ */
+const scopeCv = document.getElementById('scope'), sg = scopeCv.getContext('2d');
+
+function frame(){
+  // advance the playhead to whatever the audio clock has actually reached
+  if (playing && actx){
+    const now = actx.currentTime;
+    while (drawQueue.length && drawQueue[0].time <= now){
+      const d = drawQueue.shift();
+      head = d.step;
+      headMiss = d.on && !d.fired;
+    }
+    paintGrid();
+  }
+
+  const w = scopeCv.width, h = scopeCv.height;
+  sg.fillStyle = '#0A1315'; sg.fillRect(0, 0, w, h);
+  sg.strokeStyle = 'rgba(63,207,160,0.16)'; sg.lineWidth = 1;
+  sg.beginPath(); sg.moveTo(0, h / 2 + 0.5); sg.lineTo(w, h / 2 + 0.5); sg.stroke();
+  if (scopeAn){
+    scopeAn.getFloatTimeDomainData(scopeData);
+    let start = 0;
+    for (let i = 1; i < scopeData.length - 700; i++){
+      if (scopeData[i - 1] < 0 && scopeData[i] >= 0){ start = i; break; }
+    }
+    sg.beginPath();
+    for (let x = 0; x <= w; x++){
+      const i = start + Math.floor(x / w * 700);
+      const v = scopeData[Math.min(i, scopeData.length - 1)];
+      const y = h / 2 - v * (h / 2 - 4) * 1.5;
+      if (x === 0) sg.moveTo(0, y); else sg.lineTo(x, y);
+    }
+    sg.strokeStyle = '#3FCF8E'; sg.lineWidth = 1.5; sg.stroke();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ============================================================
+   HELP AND LANGUAGE
+   ============================================================ */
+const esc = str => String(str)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function renderHelp(){
+  const rtl = isRTL();
+  document.querySelectorAll('[data-help]').forEach(box => {
+    const h = T('help.' + box.dataset.help);
+    if (!h) return;
+    box.innerHTML = '<div class="help-note" lang="' + lang + '"' + (rtl ? ' dir="rtl"' : '') + '>' +
+      '<b>' + esc(h.t) + '</b> ' + esc(h.b) +
+      (h.ex || []).map(x => '<span class="ex">' + esc(x) + '</span>').join('') +
+      '</div>';
+  });
+  const lbl = document.getElementById('helpLangLbl');
+  if (lbl) lbl.textContent = T('helpLang');
+  ['curtainA', 'curtainB'].forEach((id, k) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = T(k === 0 ? 'start.a' : 'start.b');
+    el.setAttribute('lang', lang);
+    el.setAttribute('dir', rtl ? 'rtl' : 'ltr');
+  });
+  const sb = document.getElementById('startBtn');
+  if (sb) sb.textContent = T('start.btn');
+}
+
+function setLang(id){
+  lang = I18N[id] ? id : 'en';
+  document.querySelectorAll('.langseg button').forEach(b =>
+    b.classList.toggle('on', b.dataset.lang === lang));
+  renderHelp();
+  paintHint();
+  try { localStorage.setItem('16max.lang', lang); } catch (e) {}
+}
+
+(function buildLangPickers(){
+  const html = LANGS.map(l =>
+    '<button data-lang="' + l.id + '" lang="' + l.id + '"' +
+    (l.rtl ? ' dir="rtl"' : '') + '>' + l.label + '</button>').join('');
+  ['langSeg', 'langSegStart'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = html;
+    el.querySelectorAll('button').forEach(b =>
+      b.addEventListener('click', e => { setLang(b.dataset.lang); e.currentTarget.blur(); }));
+  });
+  let saved = null;
+  try { saved = localStorage.getItem('16max.lang'); } catch (e) {}
+  setLang(saved || 'en');
+})();
+
+const helpBtn = document.getElementById('helpBtn');
+helpBtn.addEventListener('click', () => {
+  const on = document.body.classList.toggle('helpon');
+  helpBtn.classList.toggle('on', on);
+  helpBtn.blur();
+});
+
+/* spacebar starts and stops, the way every sequencer does */
+document.addEventListener('keydown', e => {
+  if (e.key !== ' ') return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'BUTTON' || tag === 'SELECT') return;
+  e.preventDefault();
+  if (!e.repeat){ if (playing) stop(); else play(); }
+});
+
+document.getElementById('startBtn').addEventListener('click', async () => {
+  const c = document.getElementById('curtain');
+  try { await startAudio(); c.remove(); }
+  catch (err){
+    c.querySelector('p').textContent =
+      'Audio could not start. The page is most likely being viewed from a preview frame or a file:// path, ' +
+      'which blocks the audio engine from loading. Put the file on a web server — GitHub Pages works — and open it there. ' +
+      'Details: ' + err.message;
+  }
+});
+
+paintGrid(); paintDetail(); paintTransport();
+</script>
+
+</body>
+</html>
