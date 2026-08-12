@@ -10,7 +10,7 @@ One HTML file. No install, no build step, no account, no cost. Open the link and
 
 ## Why this exists
 
-[4LS](https://slowcities.github.io/4LS/) teaches how a sound is built. [ADrum](https://slowcities.github.io/Adrum/) teaches rhythm played by hand. This teaches what happens when a machine keeps time instead of a person — and, more importantly, what a machine can do that a person cannot.
+[4LS](https://slowcities.github.io/4LS/) teaches how a sound is built. [ADrum](https://slowcities.github.io/ADrum/) teaches rhythm played by hand. This teaches what happens when a machine keeps time instead of a person — and, more importantly, what a machine can do that a person cannot.
 
 The lesson is not "a sequencer repeats a pattern." A device that repeats a pattern is a recording. The lesson is **Probability**: a step set to 60% plays six times in ten, so the pattern is never quite the same twice and yet is never random. That is a machine making decisions inside limits you set, which is a different musical idea from anything else in the suite and the reason this instrument exists.
 
