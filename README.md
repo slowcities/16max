@@ -10,7 +10,7 @@ One HTML file. No install, no build step, no account, no cost. Open the link and
 
 ## Why this exists
 
-[4LS](https://slowcities.github.io/4LS/) teaches how a sound is built. [ADrum](https://slowcities.github.io/ADrum/) teaches rhythm played by hand. This teaches what happens when a machine keeps time instead of a person — and, more importantly, what a machine can do that a person cannot.
+[4LS](https://slowcities.github.io/4LS/) teaches how a sound is built. [ADrum](https://slowcities.github.io/adrum/) teaches rhythm played by hand. This teaches what happens when a machine keeps time instead of a person — and, more importantly, what a machine can do that a person cannot.
 
 The lesson is not "a sequencer repeats a pattern." A device that repeats a pattern is a recording. The lesson is **Probability**: a step set to 60% plays six times in ten, so the pattern is never quite the same twice and yet is never random. That is a machine making decisions inside limits you set, which is a different musical idea from anything else in the suite and the reason this instrument exists.
 
@@ -106,6 +106,8 @@ One oscillator, one filter, one envelope, taken from VCO 1 of 4LS. Deliberately 
 
 **Shape** sweeps continuously from triangle through saw to pulse. **Width** shapes the pulse. **Cutoff** and **Resonance** are a low pass filter that will ring on its own when pushed. **Attack, Decay, Sustain, Release** shape each note. **Glide** slides from one pitch to the next instead of jumping — with Gate at Tie the notes join up and the slide is the only thing you hear move.
 
+**Noise** switches a layer of hiss into the oscillator, shaped by the same filter and envelope as everything else. With a short Decay it becomes a percussive hit rather than a wash, so it can be punched in and out to add a rhythmic layer without touching a single step. Noise level stays where you set it while the switch is off, so a level can be dialled in before it is punched in — and both the switch and the level can be put on a controller.
+
 **Vel → Cutoff** is worth its own mention. Velocity raises the level, and this control also opens the filter with it, so a hard step is brighter as well as louder. That is most of what makes velocity feel expressive rather than technical.
 
 ### Delay
@@ -127,6 +129,7 @@ Assignable:
 | Target | Behaviour |
 | --- | --- |
 | Any voice or delay slider | Continuous, with soft takeover |
+| Noise | Toggles the layer on a press |
 | Tempo | Continuous, 40 to 240 BPM |
 | Last step | Continuous, 1 to 16 — sweeping the pattern length while it runs is a real technique |
 | Play | Toggles on a press, ignores the release |
@@ -154,7 +157,7 @@ Seven worked examples, each demonstrating one idea, all built from the same pane
 
 **Velocity and filter** — one note, sixteen times, velocity climbing from 8 to 127 with the cutoff starting at 220 Hz. Nothing changes but how hard it is struck.
 
-**Ratchets** — divisions climbing 1, 2, 3, 4 so the repeats are countable. Forty-one hits per bar instead of sixteen, with a 1/16 delay doubling them again.
+**Ratchets** — divisions climbing 1, 2, 3, 4 so the repeats are countable. Forty-one hits per bar instead of sixteen, with a 1/16 delay doubling them again and the Noise layer switched on so the repeats read as percussion.
 
 **Tie drone** — every gate at Tie, so the sequence never lets go. One continuous note with pitch, loudness and brightness stepping underneath it. This only sounds at all because Sustain is up; pull Sustain to zero and the whole thing goes silent, which is itself the clearest demonstration of what Sustain does.
 
@@ -177,6 +180,8 @@ Patterns are not saved between sessions. This is deliberate: it keeps the file s
 **Ratchets against probability.** Set a step to ×4 and 50%. It either fires four times or not at all — the roll happens once per step, not once per hit.
 
 **An echo is not an effect.** Load Two octave major, set Delay Mix to about 0.4, then walk Time from 1/16 up to dotted 1/4. Each division rewrites the rhythm of a scale that never changed.
+
+**One instrument, two parts.** Switch Noise on with a short Decay and a mid Cutoff. The same sixteen steps now carry a pitched line and a percussive one, and punching Noise in and out is an arrangement decision rather than an edit.
 
 **Playing the length.** Put Last step on a hardware knob and sweep it while the pattern runs. Students hear a phrase get cut short and turn over against the count — the same lesson as odd meter, but performed rather than set.
 
@@ -222,6 +227,8 @@ python3 -m http.server 8000
 **A step cannot tie into itself.** Holding one step in a fill, or setting Last step to 1, would otherwise leave the note-off unsent forever: the envelope never retriggers and decays to the Sustain level. Such a step falls back to a 98% gate instead.
 
 **Ties do not retrigger, ratchets do.** A tied step changes pitch with the envelope left running — the same last-note-priority behaviour 4LS has in Mono. Repeats inside a ratcheted step always re-articulate, otherwise a ratcheted tie would collapse into one long note and the repeats would vanish silently.
+
+**The delay time is smoothed and read at fractional positions.** Changing tempo moves the delay time by hundreds of samples at once, and reading at a whole-sample offset makes the read head jump — audible as a click every time the Tempo slider ticks. The read position is smoothed over about 120 ms and interpolated between samples instead, which removes the discontinuity entirely and gives the delay a tape-style glide as it slides to the new time. Measured on a tempo drag from 120 to 90 BPM at a 1/8 delay: five audible discontinuities before, none after, peak reduced elevenfold.
 
 **The delay is measured in beats and resolved to seconds at the last moment.** The panel holds a division; the engine is told a duration, recalculated whenever the tempo moves. The buffer is sized once for the worst case — two beats at 40 BPM is three seconds — and never reallocated, so changing tempo mid-performance allocates nothing.
 
