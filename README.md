@@ -10,7 +10,7 @@ One HTML file. No install, no build step, no account, no cost. Open the link and
 
 ## Why this exists
 
-[4LS](https://slowcities.github.io/4LS/) teaches how a sound is built. [ADrum](https://slowcities.github.io/ADrum/) teaches rhythm played by hand. This teaches what happens when a machine keeps time instead of a person — and, more importantly, what a machine can do that a person cannot.
+[4LS](https://slowcities.github.io/4LS/) teaches how a sound is built. [ADrum](https://slowcities.github.io/adrum/) teaches rhythm played by hand. This teaches what happens when a machine keeps time instead of a person — and, more importantly, what a machine can do that a person cannot.
 
 The lesson is not "a sequencer repeats a pattern." A device that repeats a pattern is a recording. The lesson is **Probability**: a step set to 60% plays six times in ten, so the pattern is never quite the same twice and yet is never random. That is a machine making decisions inside limits you set, which is a different musical idea from anything else in the suite and the reason this instrument exists.
 
@@ -106,6 +106,8 @@ One oscillator, one filter, one envelope, taken from VCO 1 of 4LS. Deliberately 
 
 **Shape** sweeps continuously from triangle through saw to pulse. **Width** shapes the pulse. **Cutoff** and **Resonance** are a low pass filter that will ring on its own when pushed. **Attack, Decay, Sustain, Release** shape each note. **Glide** slides from one pitch to the next instead of jumping — with Gate at Tie the notes join up and the slide is the only thing you hear move.
 
+**Level** is the oscillator on its own, separate from Master. It exists so the oscillator can be turned all the way off — with Noise switched on and Level at Off, the voice becomes a pure percussion source rather than a pitched one with hiss added.
+
 **Noise** switches a layer of hiss into the oscillator, shaped by the same filter and envelope as everything else. With a short Decay it becomes a percussive hit rather than a wash, so it can be punched in and out to add a rhythmic layer without touching a single step. Noise level stays where you set it while the switch is off, so a level can be dialled in before it is punched in — and both the switch and the level can be put on a controller.
 
 **Vel → Cutoff** is worth its own mention. Velocity raises the level, and this control also opens the filter with it, so a hard step is brighter as well as louder. That is most of what makes velocity feel expressive rather than technical.
@@ -130,6 +132,7 @@ Assignable:
 | --- | --- |
 | Any voice or delay slider | Continuous, with soft takeover |
 | Noise | Toggles the layer on a press |
+| Level and Noise level | Continuous — crossfading between them by hand turns one voice into two |
 | Tempo | Continuous, 40 to 240 BPM |
 | Last step | Continuous, 1 to 16 — sweeping the pattern length while it runs is a real technique |
 | Play | Toggles on a press, ignores the release |
@@ -182,6 +185,8 @@ Patterns are not saved between sessions. This is deliberate: it keeps the file s
 **An echo is not an effect.** Load Two octave major, set Delay Mix to about 0.4, then walk Time from 1/16 up to dotted 1/4. Each division rewrites the rhythm of a scale that never changed.
 
 **One instrument, two parts.** Switch Noise on with a short Decay and a mid Cutoff. The same sixteen steps now carry a pitched line and a percussive one, and punching Noise in and out is an arrangement decision rather than an edit.
+
+**A drum machine hiding in a synthesizer.** Turn Level to Off with Noise on. There is no oscillator left, and yet the pattern still plays — the filter and envelope alone turn noise into hats and snares. This is the same lesson ADrum teaches from the other direction, and running the two side by side makes the point twice.
 
 **Playing the length.** Put Last step on a hardware knob and sweep it while the pattern runs. Students hear a phrase get cut short and turn over against the count — the same lesson as odd meter, but performed rather than set.
 
